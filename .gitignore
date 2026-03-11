@@ -285,5 +285,5 @@ docs/source/generated
 
 # VS Code
 .vscode/
-
+cpp/examples/*/*
 # End of https://www.gitignore.io/api/c++,node,python

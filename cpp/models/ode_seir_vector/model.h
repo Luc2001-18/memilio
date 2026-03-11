@@ -46,7 +46,8 @@ namespace oseirvector
 // clang-format off
 using Flows = TypeList<Flow<InfectionState::Susceptible, InfectionState::Exposed>,
                        Flow<InfectionState::Exposed,     InfectionState::Infected>,
-                       Flow<InfectionState::Infected,    InfectionState::Recovered>>;
+                       Flow<InfectionState::Infected,    InfectionState::Recovered>,
+                       Flow<InfectionState::Susceptible_vector,    InfectionState::Infected_vector>>;
 // **TODO**: Add/Adjust the flows as needed for the model.
 
 // clang-format on
@@ -71,36 +72,58 @@ public:
     }
 
     // **TODO**: Adjust the get_flows function according to the model.
-    void get_flows(Eigen::Ref<const Eigen::VectorX<FP>> pop, Eigen::Ref<const Eigen::VectorX<FP>> y, FP t,
+    void get_flows(Eigen::Ref<const Eigen::VectorX<FP>> /*pop*/, Eigen::Ref<const Eigen::VectorX<FP>> y, FP /*t*/ ,
                    Eigen::Ref<Eigen::VectorX<FP>> flows) const override
     {
         const Index<AgeGroup> age_groups = reduce_index<Index<AgeGroup>>(this->populations.size());
         const auto& params               = this->parameters;
-
+        //  Fetch Malaria-specific parameters
+        const FP a    = params.template get<MosquitoBitingRate<FP>>();
+        const FP p_vh = params.template get<TransmissionVectorToHuman<FP>>();
+        const FP p_hv = params.template get<TransmissionHumanToVector<FP>>();
+        
+        // Fetch demographic parameters for mosquitoes
+      //  const FP mu_b = params.template get<MosquitoBirthRate<FP>>();
+       // const FP mu_d = params.template get<MosquitoDeathRate<FP>>();
         for (auto i : make_index_range(age_groups)) {
+           // Indices for Human Compartments
             const size_t Si = this->populations.get_flat_index({i, InfectionState::Susceptible});
             const size_t Ei = this->populations.get_flat_index({i, InfectionState::Exposed});
             const size_t Ii = this->populations.get_flat_index({i, InfectionState::Infected});
+            const size_t Ri = this->populations.get_flat_index({i, InfectionState::Recovered});
+            // Indices for Vector Compartments
+            const size_t Sv_i = this->populations.get_flat_index({i, InfectionState::Susceptible_vector});
+            const size_t Iv_i = this->populations.get_flat_index({i, InfectionState::Infected_vector});
+            // Calculate Populations
+            const FP Nh_i    = y[Si] + y[Ei] + y[Ii] + y[Ri];
+            const FP divNh_i = (Nh_i < Limits<FP>::zero_tolerance()) ? FP(0.0) : FP(1.0 / Nh_i);
+            
+          //  const FP Nv_i    = y[Sv_i] + y[Iv_i]; // Total vectors
+            
+            // Calculate Forces of Infection
+            const FP FOI_H = a * p_vh * (y[Iv_i] * divNh_i);
+            const FP FOI_V = a * p_hv * (y[Ii] * divNh_i);
 
-            for (auto j : make_index_range(age_groups)) {
-                const size_t Sj = this->populations.get_flat_index({j, InfectionState::Susceptible});
-                const size_t Ej = this->populations.get_flat_index({j, InfectionState::Exposed});
-                const size_t Ij = this->populations.get_flat_index({j, InfectionState::Infected});
-                const size_t Rj = this->populations.get_flat_index({j, InfectionState::Recovered});
+            // Assign the Flows
+            // --- HUMAN FLOWS ---
+            // S_H -> E_H
+            flows[Base::template get_flat_flow_index<InfectionState::Susceptible, InfectionState::Exposed>(i)] =
+                FOI_H * y[Si];
 
-                const FP Nj        = pop[Sj] + pop[Ej] + pop[Ij] + pop[Rj];
-                const FP divNj     = (Nj < Limits<FP>::zero_tolerance()) ? FP(0.0) : FP(1.0 / Nj);
-                const FP coeffStoE = params.template get<ContactPatterns<FP>>().get_cont_freq_mat().get_matrix_at(
-                                         SimulationTime<FP>(t))(i.get(), j.get()) *
-                                     params.template get<TransmissionProbabilityOnContact<FP>>()[i] * divNj;
-
-                flows[Base::template get_flat_flow_index<InfectionState::Susceptible, InfectionState::Exposed>(i)] +=
-                    coeffStoE * y[Si] * pop[Ij];
-            }
+            // E_H -> I_H
             flows[Base::template get_flat_flow_index<InfectionState::Exposed, InfectionState::Infected>(i)] =
                 (1.0 / params.template get<TimeExposed<FP>>()[i]) * y[Ei];
+
+            // I_H -> R_H
             flows[Base::template get_flat_flow_index<InfectionState::Infected, InfectionState::Recovered>(i)] =
                 (1.0 / params.template get<TimeInfected<FP>>()[i]) * y[Ii];
+
+
+            // --- VECTOR FLOWS ---
+            // S_V -> I_V
+            flows[Base::template get_flat_flow_index<InfectionState::Susceptible_vector, InfectionState::Infected_vector>(i)] =
+                FOI_V * y[Sv_i];
+           
         }
     }
 

@@ -100,9 +100,65 @@ struct ContactPatterns {
     }
 };
 
+// New Parameters added 
+
+/**
+ * @brief birth rate of the mosquito
+ */
+template <typename FP>
+struct MosquitoBirthRate {
+    using Type = UncertainValue<FP>;
+    static Type get_default() { return Type(0.1); }  // example default value
+    static std::string name() { return "MosquitoBirthRate"; }
+};
+
+
+/**
+ * @brief death rate of the mosquito
+ */
+template <typename FP>
+struct MosquitoDeathRate {
+    using Type = UncertainValue<FP>;
+    static Type get_default() { return Type(0.1); }  // example default value assuming btw that it is equal to the birth rate
+    static std::string name() { return "MosquitoDeathRate"; }
+};
+
+/**
+ * @brief Transmission from Humans to Vector
+ */
+template <typename FP>
+struct TransmissionHumanToVector {
+    using Type = UncertainValue<FP>;
+    static Type get_default() { return Type(0.3); }  // example default value 
+    static std::string name() { return "TransmissionHumanToVector"; }
+};
+
+/**
+ * @brief Transmission from Vectors to Humans
+ */
+template <typename FP>
+struct TransmissionVectorToHuman {
+    using Type = UncertainValue<FP>;
+    static Type get_default() { return Type(0.2); }  // example default value 
+    static std::string name() { return "TransmissionVectorToHuman"; }
+};
+
+/**
+ * @brief Mosquito biting rate
+ */
+template <typename FP>
+struct MosquitoBitingRate {
+    using Type = UncertainValue<FP>;
+    static Type get_default() { return Type(0.5); }  // example default value 
+    static std::string name() { return "MosquitoBitingRate"; }
+};
+
+
 template <typename FP>
 using ParametersBase =
-    ParameterSet<TransmissionProbabilityOnContact<FP>, TimeExposed<FP>, TimeInfected<FP>, ContactPatterns<FP>>;
+    ParameterSet<TransmissionProbabilityOnContact<FP>, TimeExposed<FP>, TimeInfected<FP>, ContactPatterns<FP>,
+     MosquitoBirthRate<FP>, TransmissionHumanToVector<FP>, TransmissionVectorToHuman<FP>, MosquitoDeathRate<FP>, 
+     MosquitoBitingRate<FP>>;
 
 /**
  * @brief Parameters of an age-resolved SECIR/SECIHURD model.
@@ -138,8 +194,8 @@ public:
     bool apply_constraints()
     {
         const FP tol_times = 1e-1;
-
-        int corrected = false;
+        const FP tol_pos   = 1e-6;
+        bool corrected = false;
 
         for (auto i = AgeGroup(0); i < AgeGroup(m_num_groups); ++i) {
             if (this->template get<TimeExposed<FP>>()[i] < tol_times) {
@@ -168,6 +224,49 @@ public:
                 corrected                                                     = true;
             }
         }
+        // New paramters mosquito related 
+            if (this->template get<MosquitoBirthRate<FP>>() < 0.0) {
+            log_warning("Constraint check: MosquitoBirthRate {} smaller than 0. Setting to 0.",
+                        this->template get<MosquitoBirthRate<FP>>());
+            this->template get<MosquitoBirthRate<FP>>() = 0.0;
+            corrected = true;
+        }
+
+        if (this->template get<MosquitoDeathRate<FP>>() <= 0.0) {
+            log_warning("Constraint check: MosquitoDeathRate {} must be > 0. Setting to {}.",
+                        this->template get<MosquitoDeathRate<FP>>(), tol_pos);
+            this->template get<MosquitoDeathRate<FP>>() = tol_pos;
+            corrected = true;
+        }
+
+        if (this->template get<MosquitoBitingRate<FP>>() <= 0.0) {
+            log_warning("Constraint check: MosquitoBitingRate {} must be > 0. Setting to {}.",
+                        this->template get<MosquitoBitingRate<FP>>(), tol_pos);
+            this->template get<MosquitoBitingRate<FP>>() = tol_pos;
+            corrected = true;
+        }
+
+        if (this->template get<TransmissionVectorToHuman<FP>>() < 0.0 ||
+            this->template get<TransmissionVectorToHuman<FP>>() > 1.0) {
+            log_warning("Constraint check: TransmissionVectorToHuman {} outside [0,1]. Setting to 0.",
+                        this->template get<TransmissionVectorToHuman<FP>>());
+            this->template get<TransmissionVectorToHuman<FP>>() = 0.0;
+            corrected = true;
+        }
+
+        if (this->template get<TransmissionHumanToVector<FP>>() < 0.0 ||
+            this->template get<TransmissionHumanToVector<FP>>() > 1.0) {
+            log_warning("Constraint check: TransmissionHumanToVector {} outside [0,1]. Setting to 0.",
+                        this->template get<TransmissionHumanToVector<FP>>());
+            this->template get<TransmissionHumanToVector<FP>>() = 0.0;
+            corrected = true;
+        }
+
+
+
+
+
+
         return corrected;
     }
 
@@ -179,6 +278,7 @@ public:
     bool check_constraints() const
     {
         const FP tol_times = 1e-1;
+       // const FP tol_pos   = 1e-6;
 
         for (auto i = AgeGroup(0); i < m_num_groups; i++) {
             if (this->template get<TimeExposed<FP>>()[i] < tol_times) {
@@ -205,6 +305,41 @@ public:
                 return true;
             }
         }
+
+        // New parameters
+            if (this->template get<MosquitoBirthRate<FP>>() < 0.0) {
+            log_error("Constraint check: MosquitoBirthRate {} must be >= 0.",
+                    this->template get<MosquitoBirthRate<FP>>());
+            return true;
+        }
+
+        if (this->template get<MosquitoDeathRate<FP>>() <= 0.0) {
+            log_error("Constraint check: MosquitoDeathRate {} must be > 0.",
+                    this->template get<MosquitoDeathRate<FP>>());
+            return true;
+        }
+
+        if (this->template get<MosquitoBitingRate<FP>>() <= 0.0) {
+            log_error("Constraint check: MosquitoBitingRate {} must be > 0.",
+                    this->template get<MosquitoBitingRate<FP>>());
+            return true;
+        }
+
+        if (this->template get<TransmissionVectorToHuman<FP>>() < 0.0 ||
+            this->template get<TransmissionVectorToHuman<FP>>() > 1.0) {
+            log_error("Constraint check: TransmissionVectorToHuman {} outside [0,1].",
+                    this->template get<TransmissionVectorToHuman<FP>>());
+            return true;
+        }
+
+        if (this->template get<TransmissionHumanToVector<FP>>() < 0.0 ||
+            this->template get<TransmissionHumanToVector<FP>>() > 1.0) {
+            log_error("Constraint check: TransmissionHumanToVector {} outside [0,1].",
+                    this->template get<TransmissionHumanToVector<FP>>());
+            return true;
+        }
+
+
         return false;
     }
 

@@ -33,10 +33,15 @@ namespace oseirvector
 // **TODO**: Adjust/Add the states as needed for the model.
 enum class InfectionState
 {
+    // Human states
     Susceptible,
     Exposed,
     Infected,
     Recovered,
+
+    // Mosquito states
+    Susceptible_vector,
+    Infected_vector,
     Count
 };
 
