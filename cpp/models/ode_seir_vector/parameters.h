@@ -169,6 +169,7 @@ struct MosquitoBitingRate {
     static std::string name() { return "MosquitoBitingRate"; }
 };
 
+
 /**
  * @brief Probability to be asymptomatic by leaving Exposed Compartment
  */
@@ -335,6 +336,14 @@ public:
             corrected = true;
         }
 
+       /* if (this->template get<HumanBitingRate<FP>>() <= 0.0) {
+            log_warning("Constraint check: HumanBitingRate {} must be > 0. Setting to {}.",
+                        this->template get<HumanBitingRate<FP>>(), tol_pos);
+            this->template get<HumanBitingRate<FP>>() = tol_pos;
+            corrected = true;
+        }
+            */
+
         if (this->template get<TransmissionVectorToHuman<FP>>() < 0.0 ||
             this->template get<TransmissionVectorToHuman<FP>>() > 1.0) {
             log_warning("Constraint check: TransmissionVectorToHuman {} outside [0,1]. Setting to 0.",
@@ -470,6 +479,12 @@ public:
             return true;
         }
 
+    /*    if (this->template get<HumanBitingRate<FP>>() <= 0.0) {
+            log_error("Constraint check: HumanBitingRate {} must be > 0.",
+                      this->template get<HumanBitingRate<FP>>());
+            return true;
+        }
+*/
         if (this->template get<TransmissionVectorToHuman<FP>>() < 0.0 ||
             this->template get<TransmissionVectorToHuman<FP>>() > 1.0) {
             log_error("Constraint check: TransmissionVectorToHuman {} outside [0,1].",

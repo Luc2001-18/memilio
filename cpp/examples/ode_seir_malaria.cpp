@@ -33,11 +33,11 @@ int main()
     mio::set_log_level(mio::LogLevel::warn);
 
     ScalarType t0   = 0; // Day 0 :  2010
-    ScalarType tmax = 3287.0;   //6940.0; // End of 2018 //365;
+    ScalarType tmax = 6,940.0;   //6940.0; // End of 2018 //365;
     ScalarType dt   = 0.1;
 
     mio::log_info("Simulating ODE SEIR-Vector (Malaria); t={} ... {} with dt = {}.", t0, tmax, dt);
-    // Initialize 4 groups (0, 1, 2 = Humans [less than 5 years, adult]; 3 = Mosquitoes)
+    // Initialize 4 groups (0, 1, 2 = Humans [less than 2 years, from 2 to 10, adult]; 3 = Mosquitoes)
     mio::oseirvector::Model<ScalarType> model(4);
     // Human Populations
    // ScalarType total_population                                                        = 100000;
@@ -88,17 +88,17 @@ int main()
     // Age group dependent parameters 
     for (size_t i = 0; i < 3; ++i) {
         // Set values for human groups 0, 1, and 2
-        model.parameters.get<mio::oseirvector::TimeExposed<ScalarType>>()[mio::AgeGroup(i)]  = 15; // Data Estimated
-        model.parameters.get<mio::oseirvector::TimeInfectedAsymptomatic<ScalarType>>()[mio::AgeGroup(i)] = 100.0; // Estimated
-        model.parameters.get<mio::oseirvector::TimeInfectedSymptomatic<ScalarType>>()[mio::AgeGroup(i)]  = 7.0; // Estimated 
+        model.parameters.get<mio::oseirvector::TimeExposed<ScalarType>>()[mio::AgeGroup(i)]  = 15; // Data based
+        model.parameters.get<mio::oseirvector::TimeInfectedAsymptomatic<ScalarType>>()[mio::AgeGroup(i)] = 100.0; // Data based
+        model.parameters.get<mio::oseirvector::TimeInfectedSymptomatic<ScalarType>>()[mio::AgeGroup(i)]  = 7.0; // Data based 
         model.parameters.get<mio::oseirvector::TransmissionProbabilityOnContact<ScalarType>>()[mio::AgeGroup(i)] = 0.1;
         model.parameters.get<mio::oseirvector::AsymptomaticProbability<ScalarType>>()[mio::AgeGroup(i)]  = 0.287;  // e.g., 30% are asymptomatic
         model.parameters.get<mio::oseirvector::TimeWaningImmunity<ScalarType>>()[mio::AgeGroup(i)]       = 180.0; // Data Estimated
     }
    // Age_group dependant parameters
-   model.parameters.get<mio::oseirvector::AsymptomaticProbability<ScalarType>>()[mio::AgeGroup(0)]  = 0.0; // asumption
-   model.parameters.get<mio::oseirvector::AsymptomaticProbability<ScalarType>>()[mio::AgeGroup(1)]  = 0.2; // Sara paper
-   model.parameters.get<mio::oseirvector::AsymptomaticProbability<ScalarType>>()[mio::AgeGroup(2)]  = 0.5; // asumption
+   model.parameters.get<mio::oseirvector::AsymptomaticProbability<ScalarType>>()[mio::AgeGroup(0)]  = 0.0; // asumption of the model for under 2
+   model.parameters.get<mio::oseirvector::AsymptomaticProbability<ScalarType>>()[mio::AgeGroup(1)]  = 0.2; // Data based
+   model.parameters.get<mio::oseirvector::AsymptomaticProbability<ScalarType>>()[mio::AgeGroup(2)]  = 0.35; // Data based
    
     // All this is Dummy values
     model.parameters.get<mio::oseirvector::TimeExposed<ScalarType>>()[mio::AgeGroup(3)]  = 1.0; // Dummy value
