@@ -32,6 +32,7 @@ PYBIND11_MODULE(_simulation_oseirvector, m)
           py::arg("tmax") = 6940, py::arg("dt") = 0.1, py::arg("TimeExposed") = 15.0,
           py::arg("TimeInfectedAsymptomatic") = 100.0, py::arg("TimeInfectedSymptomatic") = 7.0,
           py::arg("TransmissionProbabilityOnContact") = 0.1, py::arg("AsymptomaticProbability") = 0.287,
-          py::arg("TimeWaningImmunity") = 180.0);
+          py::arg("TimeWaningImmunity") = 180.0, py::arg("BitingRateNorth") = 0.4, py::arg("BitingRateCenter") = 0.4,
+          py::arg("BitingRateSouth") = 0.4);
     m.attr("__version__") = "dev";
 }

@@ -33,9 +33,12 @@ def run_benin_simulation():
         TimeExposed = 15.0,
         TimeInfectedAsymptomatic = 100.0,  
         TimeInfectedSymptomatic = 7.0,
-        TransmissionProbabilityOnContact = 0.1,  
+        TransmissionProbabilityOnContact = 0.1,
         AsymptomaticProbability = 0.287,
-        TimeWaningImmunity = 180.0
+        TimeWaningImmunity = 180.0,
+        BitingRateNorth = 0.4,
+        BitingRateCenter = 0.4,
+        BitingRateSouth = 0.4
     )
     result_array = results.as_ndarray()
     results.print_table(column_labels = ["S_K", "E_K", "I_A_K", "I_S_K", "R_K", "Sv_K_Ghost", "Iv_K_Ghost",

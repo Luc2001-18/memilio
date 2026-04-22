@@ -31,7 +31,8 @@
 auto simulate(ScalarType t0 = 0, ScalarType tmax = 6940, ScalarType dt = 0.1, ScalarType TimeExposed = 15.0,
               ScalarType TimeInfectedAsymptomatic = 100.0, ScalarType TimeInfectedSymptomatic = 7.0,
               ScalarType TransmissionProbabilityOnContact = 0.1, ScalarType AsymptomaticProbability = 0.287,
-              ScalarType TimeWaningImmunity = 180.0)
+              ScalarType TimeWaningImmunity = 180.0, ScalarType BitingRateNorth = 0.4,
+              ScalarType BitingRateCenter = 0.4, ScalarType BitingRateSouth = 0.4)
 {
     mio::set_log_level(mio::LogLevel::warn);
 
@@ -78,7 +79,6 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 6940, ScalarType dt = 0.1, Sc
     model.populations[{mio::AgeGroup(3), mio::oseirvector::InfectionState::Recovered}]            = 0.0;
     // Parameters
     // Global parametera
-    model.parameters.set<mio::oseirvector::MosquitoBitingRate<ScalarType>>(0.4); // Mosquito bites a human every ~4 days
     model.parameters.set<mio::oseirvector::TransmissionVectorToHuman<ScalarType>>(0.27); // Data estimated
     model.parameters.set<mio::oseirvector::TransmissionHumanToVector<ScalarType>>(0.64); // Data estimated
     model.parameters.set<mio::oseirvector::MosquitoBirthRate<ScalarType>>(
@@ -130,6 +130,13 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 6940, ScalarType dt = 0.1, Sc
     auto model_north  = model;
     auto model_center = model;
     auto model_south  = model;
+
+    model_north.parameters.set<mio::oseirvector::MosquitoBitingRate<ScalarType>>(
+        BitingRateNorth); // Mosquito bites a human every ~4 days
+    model_center.parameters.set<mio::oseirvector::MosquitoBitingRate<ScalarType>>(
+        BitingRateCenter); // Mosquito bites a human every ~4 days
+    model_south.parameters.set<mio::oseirvector::MosquitoBitingRate<ScalarType>>(
+        BitingRateSouth); // Mosquito bites a human every ~4 days
 
     //  PATCH-SPECIFIC OVERRIDES
 
