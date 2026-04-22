@@ -36,7 +36,8 @@ enum class InfectionState
     // Human states
     Susceptible,
     Exposed,
-    Infected,
+    InfectedAsymptomatic,
+    InfectedSymptomatic,
     Recovered,
 
     // Mosquito states

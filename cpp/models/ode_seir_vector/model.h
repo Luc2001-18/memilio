@@ -45,8 +45,11 @@ namespace oseirvector
 
 // clang-format off
 using Flows = TypeList<Flow<InfectionState::Susceptible, InfectionState::Exposed>,
-                       Flow<InfectionState::Exposed,     InfectionState::Infected>,
-                       Flow<InfectionState::Infected,    InfectionState::Recovered>,
+                       Flow<InfectionState::Exposed,              InfectionState::InfectedAsymptomatic>,
+                       Flow<InfectionState::Exposed,              InfectionState::InfectedSymptomatic>,
+                       Flow<InfectionState::InfectedAsymptomatic, InfectionState::Recovered>,
+                       Flow<InfectionState::InfectedSymptomatic,  InfectionState::Recovered>,
+                       Flow<InfectionState::Recovered,            InfectionState::Susceptible>,
                        Flow<InfectionState::Susceptible_vector,    InfectionState::Infected_vector>>;
 // **TODO**: Add/Adjust the flows as needed for the model.
 
@@ -72,7 +75,7 @@ public:
     }
 
     // **TODO**: Adjust the get_flows function according to the model.
-    void get_flows(Eigen::Ref<const Eigen::VectorX<FP>> /*pop*/, Eigen::Ref<const Eigen::VectorX<FP>> y, FP /*t*/ ,
+    void get_flows(Eigen::Ref<const Eigen::VectorX<FP>> /*pop*/, Eigen::Ref<const Eigen::VectorX<FP>> y, FP t ,
                    Eigen::Ref<Eigen::VectorX<FP>> flows) const override
     {
         const Index<AgeGroup> age_groups = reduce_index<Index<AgeGroup>>(this->populations.size());
@@ -81,43 +84,112 @@ public:
         const FP a    = params.template get<MosquitoBitingRate<FP>>();
         const FP p_vh = params.template get<TransmissionVectorToHuman<FP>>();
         const FP p_hv = params.template get<TransmissionHumanToVector<FP>>();
-        
+        // Fetch Seasonality Parameters 
+        const FP amp1 = params.template get<SeasonalityAmp1<FP>>();
+        const FP amp2 = params.template get<SeasonalityAmp2<FP>>();
+        const FP phi1 = params.template get<SeasonalityPhi1<FP>>();
+        const FP phi2 = params.template get<SeasonalityPhi2<FP>>();
+        const FP peak = params.template get<SeasonalityPeak<FP>>();
+        // CALCULATE SEASONALITY FOR THIS TIME STEP (t)
+        const FP term1 = amp1 * std::pow(std::abs(std::cos((2.0 * M_PI * t / 365.0) - phi1)), peak);
+        const FP term2 = amp2 * std::pow(std::abs(std::cos((4.0 * M_PI * t / 365.0) - phi2)), peak);
+        const FP seas  = 1.0 + term1 + term2;
         // Fetch demographic parameters for mosquitoes
       //  const FP mu_b = params.template get<MosquitoBirthRate<FP>>();
        // const FP mu_d = params.template get<MosquitoDeathRate<FP>>();
+      
+        // Identify the vector group (the very last group)
+        const size_t num_groups = (size_t)params.get_num_groups();
+        const size_t vector_idx = num_groups - 1; 
+
+        // Pre-calculate the total human population and total infected humans
+        FP total_human_population = 0.0;
+        FP total_infected_humans  = 0.0;
+
+        for (size_t h = 0; h < vector_idx; ++h) {
+            // Get the indices for the human compartments in age group 'h'
+            const size_t S_h  = this->populations.get_flat_index({mio::AgeGroup(h), InfectionState::Susceptible});
+            const size_t E_h  = this->populations.get_flat_index({mio::AgeGroup(h), InfectionState::Exposed});
+            const size_t IA_h = this->populations.get_flat_index({mio::AgeGroup(h), InfectionState::InfectedAsymptomatic});
+            const size_t IS_h = this->populations.get_flat_index({mio::AgeGroup(h), InfectionState::InfectedSymptomatic});
+            const size_t R_h  = this->populations.get_flat_index({mio::AgeGroup(h), InfectionState::Recovered});
+            
+            // Sum up the values
+            total_human_population += y[S_h] + y[E_h] + y[IA_h] + y[IS_h] + y[R_h];
+            total_infected_humans  += y[IA_h] + y[IS_h];
+        }
+        
+        // Prevent division by zero later
+        const FP div_total_human = (total_human_population < Limits<FP>::zero_tolerance()) ? FP(0.0) : FP(1.0 / total_human_population);
+
         for (auto i : make_index_range(age_groups)) {
            // Indices for Human Compartments
             const size_t Si = this->populations.get_flat_index({i, InfectionState::Susceptible});
             const size_t Ei = this->populations.get_flat_index({i, InfectionState::Exposed});
-            const size_t Ii = this->populations.get_flat_index({i, InfectionState::Infected});
+            const size_t IAi = this->populations.get_flat_index({i, InfectionState::InfectedAsymptomatic});
+            const size_t ISi = this->populations.get_flat_index({i, InfectionState::InfectedSymptomatic});
             const size_t Ri = this->populations.get_flat_index({i, InfectionState::Recovered});
             // Indices for Vector Compartments
             const size_t Sv_i = this->populations.get_flat_index({i, InfectionState::Susceptible_vector});
-            const size_t Iv_i = this->populations.get_flat_index({i, InfectionState::Infected_vector});
+           // const size_t Iv_i = this->populations.get_flat_index({i, InfectionState::Infected_vector});
             // Calculate Populations
-            const FP Nh_i    = y[Si] + y[Ei] + y[Ii] + y[Ri];
-            const FP divNh_i = (Nh_i < Limits<FP>::zero_tolerance()) ? FP(0.0) : FP(1.0 / Nh_i);
+         //   const FP Nh_i    = y[Si] + y[Ei] + y[IAi] + y[ISi] + y[Ri];
+          //  const FP divNh_i = (Nh_i < Limits<FP>::zero_tolerance()) ? FP(0.0) : FP(1.0 / Nh_i);
             
           //  const FP Nv_i    = y[Sv_i] + y[Iv_i]; // Total vectors
             
             // Calculate Forces of Infection
-            const FP FOI_H = a * p_vh * (y[Iv_i] * divNh_i);
-            const FP FOI_V = a * p_hv * (y[Ii] * divNh_i);
 
+            FP FOI_H = 0.0;
+            FP FOI_V = 0.0;
+
+            if ((size_t)i != vector_idx) {
+                // FOR HUMAN GROUPS (0, 1, 2):
+                // Get the global infected mosquito population from the Vector Group
+                const size_t Iv_global = this->populations.get_flat_index({mio::AgeGroup(vector_idx), InfectionState::Infected_vector});
+                
+                // 2. Humans get infected by the global mosquito pool
+                FOI_H = (a * seas) * p_vh * (y[Iv_global] * div_total_human);
+            } 
+            else {
+                // Mosquitoes get infected by the combined human pool we calculated in Step 1
+                FOI_V = (a * seas) * p_hv * (total_infected_humans * div_total_human);
+            }
+           
+            
+           // const FP FOI_H = (a*seas) * p_vh * (y[Iv_i] * divNh_i);
+           // const FP FOI_V = (a*seas) * p_hv * ((y[IAi] + y[ISi]) * divNh_i);
+            // Fetch parameters
+            const FP p_asymp = params.template get<AsymptomaticProbability<FP>>()[i];
+            const FP t_E     = params.template get<TimeExposed<FP>>()[i];
+            const FP gamma_A = params.template get<TimeInfectedAsymptomatic<FP>>()[i];
+            const FP gamma_S = params.template get<TimeInfectedSymptomatic<FP>>()[i];
+            const FP t_W = params.template get<TimeWaningImmunity<FP>>()[i];
             // Assign the Flows
             // --- HUMAN FLOWS ---
             // S_H -> E_H
             flows[Base::template get_flat_flow_index<InfectionState::Susceptible, InfectionState::Exposed>(i)] =
                 FOI_H * y[Si];
 
-            // E_H -> I_H
-            flows[Base::template get_flat_flow_index<InfectionState::Exposed, InfectionState::Infected>(i)] =
-                (1.0 / params.template get<TimeExposed<FP>>()[i]) * y[Ei];
+            // E_H -> I_A
+            flows[Base::template get_flat_flow_index<InfectionState::Exposed, InfectionState::InfectedAsymptomatic>(i)] =
+                p_asymp * (1.0 / t_E) * y[Ei];
 
-            // I_H -> R_H
-            flows[Base::template get_flat_flow_index<InfectionState::Infected, InfectionState::Recovered>(i)] =
-                (1.0 / params.template get<TimeInfected<FP>>()[i]) * y[Ii];
+            // E_H -> I_S
+            flows[Base::template get_flat_flow_index<InfectionState::Exposed, InfectionState::InfectedSymptomatic>(i)] =
+               (1.0- p_asymp) * (1.0 / t_E) * y[Ei];
 
+            // I_A -> R_H
+            flows[Base::template get_flat_flow_index<InfectionState::InfectedAsymptomatic, InfectionState::Recovered>(i)] =
+                (1.0 / gamma_A) * y[IAi];
+
+            // I_S -> R_H
+            flows[Base::template get_flat_flow_index<InfectionState::InfectedSymptomatic, InfectionState::Recovered>(i)] =
+                (1.0 / gamma_S) * y[ISi];
+
+            //R_H -> S_H
+            flows[Base::template get_flat_flow_index<InfectionState::Recovered, InfectionState::Susceptible>(i)] =
+                (1.0 / t_W) * y[Ri];
 
             // --- VECTOR FLOWS ---
             // S_V -> I_V
@@ -126,7 +198,8 @@ public:
            
         }
     }
-
+    
+    #if 0
     /**
     *@brief Computes the reproduction number at a given index time of the Model output obtained by the Simulation.
     *@param t_idx The index time at which the reproduction number is computed.
@@ -224,7 +297,7 @@ public:
         auto result = linear_interpolation(t_value, y.get_time(time_late - 1), y.get_time(time_late), y1, y2);
         return mio::success(static_cast<FP>(result));
     }
-
+    
     /**
      * serialize this.
      * @see mio::serialize
@@ -236,6 +309,9 @@ public:
         obj.add_element("Parameters", this->parameters);
         obj.add_element("Populations", this->populations);
     }
+    
+    #endif
+    
 
     /**
      * deserialize an object of this class.
