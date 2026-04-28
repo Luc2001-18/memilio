@@ -29,9 +29,9 @@
 #include "memilio/mobility/graph.h"
 
 auto simulate(ScalarType t0 = 0, ScalarType tmax = 6940, ScalarType dt = 0.1, ScalarType TimeExposed = 15.0,
-              ScalarType TimeInfectedAsymptomatic = 100.0, ScalarType TimeInfectedSymptomatic = 7.0,
+              ScalarType TimeInfectedAsymptomatic = 80.0, ScalarType TimeInfectedSymptomatic = 7.0,
               ScalarType TransmissionProbabilityOnContact = 0.1, ScalarType AsymptomaticProbability = 0.287,
-              ScalarType TimeWaningImmunity = 180.0, ScalarType BitingRateNorth = 0.4,
+              ScalarType TimeWaningImmunity = 1730.0, ScalarType BitingRateNorth = 0.4,
               ScalarType BitingRateCenter = 0.4, ScalarType BitingRateSouth = 0.4)
 {
     mio::set_log_level(mio::LogLevel::warn);
@@ -47,10 +47,10 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 6940, ScalarType dt = 0.1, Sc
     // ScalarType total_population                                                        = 100000;
     std::array<ScalarType, 3> age_group_props = {0.2075, 0.2590, 0.5335}; // according to Benin's data
 
-    std::array<ScalarType, 3> prop_E  = {0.020, 0.020, 0.010}; // 2%, 2%, 1% are currently incubating
-    std::array<ScalarType, 3> prop_IA = {0.000, 0.287, 0.150}; // 0% (Per your assumption!), 28.7% (Ouidah study), 15%
-    std::array<ScalarType, 3> prop_IS = {0.100, 0.020, 0.005}; // 10%, 2%, 0.5% currently sick with fever
-    std::array<ScalarType, 3> prop_R  = {0.150, 0.300, 0.450}; // 15%, 30%, 45% protected by recent infection
+    std::array<ScalarType, 3> prop_E  = {0.02, 0.020, 0.010}; // 2%, 2%, 1% are currently incubating
+    std::array<ScalarType, 3> prop_IA = {0.05, 0.287, 0.150}; // 0% (Per your assumption!), 28.7% (Ouidah study), 15%
+    std::array<ScalarType, 3> prop_IS = {0.03, 0.020, 0.005}; // 10%, 2%, 0.5% currently sick with fever
+    std::array<ScalarType, 3> prop_R  = {0.10, 0.300, 0.60}; // 15%, 30%, 45% protected by recent infection
     ScalarType prop_vector_infected   = 0.01;
 
     for (size_t i = 0; i < 3; ++i) {
@@ -79,14 +79,14 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 6940, ScalarType dt = 0.1, Sc
     model.populations[{mio::AgeGroup(3), mio::oseirvector::InfectionState::Recovered}]            = 0.0;
     // Parameters
     // Global parametera
-    model.parameters.set<mio::oseirvector::TransmissionVectorToHuman<ScalarType>>(0.27); // Data estimated
-    model.parameters.set<mio::oseirvector::TransmissionHumanToVector<ScalarType>>(0.64); // Data estimated
+    model.parameters.set<mio::oseirvector::TransmissionVectorToHuman<ScalarType>>(0.24);// (0.27); // Data estimated
+    model.parameters.set<mio::oseirvector::TransmissionHumanToVector<ScalarType>>(0.02); // (0.64); // Data estimated
     model.parameters.set<mio::oseirvector::MosquitoBirthRate<ScalarType>>(
         0.05); // Even if unused in flows, good to set to avoid uninitialized memory
     model.parameters.set<mio::oseirvector::MosquitoDeathRate<ScalarType>>(0.05);
     // Set the seasonality values
-    model.parameters.set<mio::oseirvector::SeasonalityAmp1<ScalarType>>(0.1);
-    model.parameters.set<mio::oseirvector::SeasonalityAmp2<ScalarType>>(0.1);
+    model.parameters.set<mio::oseirvector::SeasonalityAmp1<ScalarType>>(0.1); //(0.1);
+    model.parameters.set<mio::oseirvector::SeasonalityAmp2<ScalarType>>(0.1); //(0.1);
     model.parameters.set<mio::oseirvector::SeasonalityPhi1<ScalarType>>(2.5);
     model.parameters.set<mio::oseirvector::SeasonalityPhi2<ScalarType>>(6.5);
     model.parameters.set<mio::oseirvector::SeasonalityPeak<ScalarType>>(3);
@@ -153,15 +153,18 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 6940, ScalarType dt = 0.1, Sc
         patch.populations[{mio::AgeGroup(3), mio::oseirvector::InfectionState::Susceptible_vector}] *= total_vectors;
         patch.populations[{mio::AgeGroup(3), mio::oseirvector::InfectionState::Infected_vector}] *= total_vectors;
     };
-
+    
+    set_patch_population(model_north,  4639811.0, 1000000.0); //  4639811.0);   // 1:1
+    set_patch_population(model_center, 2457289.0, 1000000.0);// 1965831.0);   // 0.8:1
+    set_patch_population(model_south,  7548534.0, 1000000.0); //  11322801.0);  // 1.5:1
     // NORTH BENIN
-    set_patch_population(model_north, 4639811.0, 9279622.0); // assume 2 times mosquitoes than human
+    //set_patch_population(model_north, 4639811.0, 9279622.0); // assume 2 times mosquitoes than human
 
     // CENTER BENIN
-    set_patch_population(model_center, 2457289.0, 4914578.0); // assume 2 times mosquitoes than human
+    //set_patch_population(model_center, 2457289.0, 4914578.0); // assume 2 times mosquitoes than human
 
     // SOUTH BENIN
-    set_patch_population(model_south, 7548534.0, 22645602.0); // assume 3 times mosquitoes than human, more humid
+    //set_patch_population(model_south, 7548534.0, 22645602.0); // assume 3 times mosquitoes than human, more humid
 
     model_north.check_constraints();
     model_center.check_constraints();
@@ -210,16 +213,16 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 6940, ScalarType dt = 0.1, Sc
     // Add the specific routes : go for Symmetric assumption for now..may change later
 
     // North (Node 0) <--> Center (Node 1): Rate 0.3
-    g.add_edge(0, 1, make_mobility_vector(0.03), indices_save_edges);
-    g.add_edge(1, 0, make_mobility_vector(0.03), indices_save_edges);
+    g.add_edge(0, 1, make_mobility_vector(0.0000), indices_save_edges);
+    g.add_edge(1, 0, make_mobility_vector(0.0000), indices_save_edges);
 
     // Center (Node 1) <--> South (Node 2): Rate 0.5
-    g.add_edge(1, 2, make_mobility_vector(0.05), indices_save_edges);
-    g.add_edge(2, 1, make_mobility_vector(0.05), indices_save_edges);
+    g.add_edge(1, 2, make_mobility_vector(0.0000), indices_save_edges);
+    g.add_edge(2, 1, make_mobility_vector(0.0000), indices_save_edges);
 
     // North (Node 0) <--> South (Node 2): Rate 0.1
-    g.add_edge(0, 2, make_mobility_vector(0.01), indices_save_edges);
-    g.add_edge(2, 0, make_mobility_vector(0.01), indices_save_edges);
+    g.add_edge(0, 2, make_mobility_vector(0.0000), indices_save_edges);
+    g.add_edge(2, 0, make_mobility_vector(0.0000), indices_save_edges);
 
     // Run the simulation
     ScalarType dt_2 = 5.0;
@@ -227,13 +230,19 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 6940, ScalarType dt = 0.1, Sc
 
     sim.advance(tmax);
 
-    // OUTPUT RESULTS (Example: North Benin / Node 0)
-
-    // Extract the raw results specifically from Node 0
+    // OUTPUT RESULTS FOR ALL REGIONS
     auto& results_north = sim.get_graph().nodes()[0].property.get_result();
+    auto& results_center = sim.get_graph().nodes()[1].property.get_result();
+    auto& results_south = sim.get_graph().nodes()[2].property.get_result();
 
-    // Interpolate the results
-    return mio::interpolate_simulation_result<ScalarType>(results_north);
+    // Create a vector to hold all 3 interpolated results
+    std::vector<mio::TimeSeries<ScalarType>> all_results;
+    
+    all_results.push_back(mio::interpolate_simulation_result<ScalarType>(results_north));
+    all_results.push_back(mio::interpolate_simulation_result<ScalarType>(results_center));
+    all_results.push_back(mio::interpolate_simulation_result<ScalarType>(results_south));
+
+    return all_results;
 }
 
 #ifndef OSEIRVECTOR_BINDINGS_SKIP_MAIN
@@ -246,11 +255,11 @@ int main()
 
     // Print the table using specific Malaria compartments
     interpolated_results_north.print_table(
-        {// Group 0: Kids < 5
+        {// Group 0: Kids < 2
          "S_K", "E_K", "I_A_K", "I_S_K", "R_K", "Sv_K_Ghost", "Iv_K_Ghost",
 
-         // Group 1: Ages 5 to 15
-         "S_5_15", "E_5_15", "I_A_5_15", "I_S_5_15", "R_5_15", "Sv_5_Ghost", "Iv_5_Ghost",
+         // Group 1: Ages 2 to 10
+         "S_2_10", "E_2_10", "I_A_2_10", "I_S_2_10", "R_2_10", "Sv_5_Ghost", "Iv_5_Ghost",
 
          // Group 2: Adults 15+
          "S_Ad", "E_Ad", "I_A_Ad", "I_S_Ad", "R_Ad", "Sv_Ad_Ghost", "Iv_Ad_Ghost",
