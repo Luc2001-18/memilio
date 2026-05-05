@@ -124,7 +124,7 @@ for region in REGION_NAMES:
         ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    fname = f"{region}_compartments.png"
+    fname = f"{region}_compartmentss.png" 
     plt.savefig(fname, dpi=150)
     print(f"  Saved: {fname}")
     plt.close()
