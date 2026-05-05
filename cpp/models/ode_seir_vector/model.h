@@ -50,7 +50,7 @@ using Flows = TypeList<Flow<InfectionState::Susceptible, InfectionState::Exposed
                        Flow<InfectionState::InfectedAsymptomatic, InfectionState::Recovered>,
                        Flow<InfectionState::InfectedSymptomatic,  InfectionState::Recovered>,
                        Flow<InfectionState::Recovered,            InfectionState::Susceptible>,
-                       Flow<InfectionState::Susceptible_vector,    InfectionState::Infected_vector>>;
+                       Flow<InfectionState::Susceptible_vector,   InfectionState::Infected_vector>>;
 // **TODO**: Add/Adjust the flows as needed for the model.
 
 // clang-format on
@@ -82,6 +82,7 @@ public:
         const auto& params               = this->parameters;
         //  Fetch Malaria-specific parameters
         const FP a    = params.template get<MosquitoBitingRate<FP>>();
+       // const FP hbr  = params.template get<HumanBitingRate<FP>>();
         const FP p_vh = params.template get<TransmissionVectorToHuman<FP>>();
         const FP p_hv = params.template get<TransmissionHumanToVector<FP>>();
         // Fetch Seasonality Parameters 
@@ -131,7 +132,7 @@ public:
             const size_t Ri = this->populations.get_flat_index({i, InfectionState::Recovered});
             // Indices for Vector Compartments
             const size_t Sv_i = this->populations.get_flat_index({i, InfectionState::Susceptible_vector});
-           // const size_t Iv_i = this->populations.get_flat_index({i, InfectionState::Infected_vector});
+          //  const size_t Iv_i = this->populations.get_flat_index({i, InfectionState::Infected_vector});
             // Calculate Populations
          //   const FP Nh_i    = y[Si] + y[Ei] + y[IAi] + y[ISi] + y[Ri];
           //  const FP divNh_i = (Nh_i < Limits<FP>::zero_tolerance()) ? FP(0.0) : FP(1.0 / Nh_i);
@@ -195,7 +196,9 @@ public:
             // S_V -> I_V
             flows[Base::template get_flat_flow_index<InfectionState::Susceptible_vector, InfectionState::Infected_vector>(i)] =
                 FOI_V * y[Sv_i];
-           
+           // I_V -> S_V (mosquito turnover: infected mosquitoes die and are replaced by susceptible ones)
+           // flows[Base::template get_flat_flow_index<InfectionState::Infected_vector, InfectionState::Susceptible_vector>(i)] =
+            //    mu_d * y[Iv_i];
         }
     }
     
