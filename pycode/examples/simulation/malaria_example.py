@@ -106,7 +106,7 @@ def run_benin_simulation(params):
         TimeInfectedSymptomatic      = 7.0,
         TransmissionProbabilityOnContact = 0.1,
         AsymptomaticProbability      = 0.287,
-        TimeWaningImmunity           = 1730.0,
+        TimeWaningImmunity           = 180, #730.0,
         BitingRateNorth              = params["BitingRateNorth"],
         BitingRateCenter             = params["BitingRateCenter"],
         BitingRateSouth              = params["BitingRateSouth"]
@@ -218,9 +218,9 @@ if __name__ == "__main__":
 
     # --- Prior distributions ---
     prior = pyabc.Distribution(
-    BitingRateNorth  = pyabc.RV("uniform", 0.025, 0.1),
-    BitingRateCenter = pyabc.RV("uniform", 0.025, 0.1),
-    BitingRateSouth  = pyabc.RV("uniform", 0.025, 0.1),
+    BitingRateNorth  = pyabc.RV("uniform", 0.3, 0.5),
+    BitingRateCenter = pyabc.RV("uniform", 0.3, 0.5),
+    BitingRateSouth  = pyabc.RV("uniform", 0.3, 0.5),
     )
 
     # --- Quick sanity check before launching ABC ---
