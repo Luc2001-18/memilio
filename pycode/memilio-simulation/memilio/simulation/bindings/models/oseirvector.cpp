@@ -35,6 +35,6 @@ PYBIND11_MODULE(_simulation_oseirvector, m)
           py::arg("TimeWaningImmunity") = 180.0, py::arg("BitingRateNorth") = 0.4, py::arg("BitingRateCenter") = 0.4,
           py::arg("BitingRateSouth") = 0.4, py::arg("TransmissionVectorToHuman") = 0.24, 
           py::arg("TransmissionHumanToVector") = 0.02,
-          py::arg("ic_scale") = 1.0);
+          py::arg("ic_scale") = 1.0); //, py::arg("ic_scale_north") = 1.2, py::arg("ic_scale_south") = 0.8);
     m.attr("__version__") = "dev";
 }

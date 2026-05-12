@@ -16,11 +16,11 @@ from memilio.simulation import oseirvector
 BITING_RATE_NORTH  = 0.4
 BITING_RATE_CENTER = 0.4
 BITING_RATE_SOUTH  = 0.4
-REPORTING_RATE = 0.0433
+REPORTING_RATE =  0.9965
 T0   = 0.0
-TMAX = 730.0   # one year
+TMAX = 1095.0   # one year
 DT   = 1.0     # daily resolution
-
+Alpha = 1.0339
 # Fixed parameters (not being calibrated here)
 TIME_EXPOSED                    = 15.0
 TIME_INFECTED_ASYMPTOMATIC      = 80.0
@@ -29,7 +29,7 @@ TRANSMISSION_PROB_ON_CONTACT    = 0.1
 ASYMPTOMATIC_PROBABILITY        = 0.287
 TIME_WANING_IMMUNITY            = 180 #730.0
 TRANSMISSION_VECTOR_TO_HUMAN    = 0.27 #0.27
-TRANSMISSION_HUMAN_TO_VECTOR    = 0.02 #0.02
+TRANSMISSION_HUMAN_TO_VECTOR    = 0.02
 
 # =============================================================================
 # COMPARTMENT INDEX MAP
@@ -40,22 +40,32 @@ TRANSMISSION_HUMAN_TO_VECTOR    = 0.02 #0.02
 # =============================================================================
 
 COMPARTMENTS = {
-    0: {"S": 0,  "E": 1,  "IA": 2,  "IS": 3,  "R": 4},
-    1: {"S": 7,  "E": 8,  "IA": 9,  "IS": 10, "R": 11},
-    2: {"S": 14, "E": 15, "IA": 16, "IS": 17, "R": 18},
+    0: {"S": 1,  "E": 2,  "IA": 3,  "IS": 4,  "R": 5},
+    1: {"S": 8,  "E": 9,  "IA": 10, "IS": 11, "R": 12},
+    2: {"S": 15, "E": 16, "IA": 17, "IS": 18, "R": 19},
 }
-
-EXPOSED_INDICES = [1, 8, 15]
-HUMAN_INDICES   = [0, 1, 2, 3, 4, 7, 8, 9, 10, 11, 14, 15, 16, 17, 18]
+EXPOSED_INDICES = [2, 9, 16]
+HUMAN_INDICES   = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19]
 
 AGE_GROUP_NAMES = ["Kids < 2y", "Children 2-10y", "Adults 10+"]
 REGION_NAMES    = ["north", "center", "south"]
+
+# OBSERVED = {
+#     "north":  {"prev": [54.71, 50.02], "inc": [532.99, 510.55]},
+#     "center": {"prev": [42.69, 32.84], "inc": [456.79, 377.24]},
+#     "south":  {"prev": [26.03, 23.15], "inc": [318.27, 293.35]},
+# }
+OBSERVED = {
+    "north":  {"prev": [54.71, 50.02, 45.59], "inc": [532.99, 510.55, 483.01]},
+    "center": {"prev": [42.69, 32.84, 30.12], "inc": [456.79, 377.24, 354.06]},
+    "south":  {"prev": [26.03, 23.15, 22.29], "inc": [318.27, 293.35, 284.87]},
+}
 
 # =============================================================================
 # RUN SIMULATION
 # =============================================================================
 
-print("Running simulation for 1 year...")
+print("Running simulation for 3 year...")
 print(f"  BitingRates: North={BITING_RATE_NORTH}, "
       f"Center={BITING_RATE_CENTER}, South={BITING_RATE_SOUTH}")
 
@@ -73,7 +83,8 @@ results = oseirvector.simulate(
     TransmissionHumanToVector    = TRANSMISSION_HUMAN_TO_VECTOR,
     BitingRateNorth              = BITING_RATE_NORTH,
     BitingRateCenter             = BITING_RATE_CENTER,
-    BitingRateSouth              = BITING_RATE_SOUTH
+    BitingRateSouth              = BITING_RATE_SOUTH,
+    ic_scale                     = Alpha
 )
 
 # Convert to numpy — shape becomes (timepoints, compartments) after transpose
@@ -82,7 +93,6 @@ for i, name in enumerate(REGION_NAMES):
     region_data[name] = results[i].as_ndarray().T  # shape: (365, 28)
 
 print(f"  Simulation done. Output shape: {region_data['north'].shape}")
-
 # =============================================================================
 # MONTHS AXIS (approximate: 30 days per month)
 # =============================================================================
@@ -98,7 +108,7 @@ for region in REGION_NAMES:
     data = region_data[region]
 
     fig, axes = plt.subplots(1, 3, figsize=(16, 5), sharey=False)
-    fig.suptitle(f"Benin Malaria — {region.capitalize()} Region (2010-2011)", fontsize=14)
+    fig.suptitle(f"Benin Malaria — {region.capitalize()} Region (2010-2012)", fontsize=14)
     for g, ax in enumerate(axes):
         idx = COMPARTMENTS[g]
 
@@ -130,11 +140,90 @@ for region in REGION_NAMES:
     plt.close()
 
 # =============================================================================
+# DISTANCE PLOTS — model vs observed per year, per region
+# =============================================================================
+
+years_labels = [2010, 2011, 2012]
+
+for region in REGION_NAMES:
+    data = region_data[region]
+
+    SYMPTOMATIC_FRACTIONS = [1.0, 0.8, 0.65]
+    E_INDICES             = [2, 9, 16]
+    idx_g1                = COMPARTMENTS[1]
+
+    model_prev = []
+    model_inc  = []
+
+    for year_idx in range(3):
+        start  = year_idx * 365
+        end    = start + 365
+        y_data = data[start:end, :]
+
+        # Prevalence
+        N_g1   = (y_data[:, idx_g1["S"]] + y_data[:, idx_g1["E"]] +
+                  y_data[:, idx_g1["IA"]] + y_data[:, idx_g1["IS"]] +
+                  y_data[:, idx_g1["R"]])
+        inf_g1 = y_data[:, idx_g1["IA"]] + y_data[:, idx_g1["IS"]]
+        model_prev.append(np.mean(inf_g1 / np.where(N_g1 == 0, 1, N_g1)) * 100)
+
+        # Incidence
+        daily_clinical = sum(
+            SYMPTOMATIC_FRACTIONS[g] * y_data[:, E_INDICES[g]] / TIME_EXPOSED
+            for g in range(3)
+        )
+        pop_at_risk = y_data[0, HUMAN_INDICES].sum()
+        model_inc.append((np.sum(daily_clinical) * REPORTING_RATE / pop_at_risk) * 1000)
+
+    obs_prev = OBSERVED[region]["prev"]
+    obs_inc  = OBSERVED[region]["inc"]
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig.suptitle(f"Model vs Observed — {region.capitalize()} Region (2010-2012)", fontsize=14)
+
+    for ax, model_vals, obs_vals, ylabel, title in zip(
+        axes,
+        [model_prev, model_inc],
+        [obs_prev,   obs_inc],
+        ["Prevalence PfPR 2-10 (%)", "Incidence (per 1000/year)"],
+        ["Prevalence", "Incidence"]
+    ):
+        for yr_idx, year in enumerate(years_labels):
+            mv = model_vals[yr_idx]
+            ov = obs_vals[yr_idx]
+
+            # Vertical line connecting the two points
+            ax.plot([year, year], [mv, ov],
+                    color="grey", linewidth=1.5, zorder=1)
+
+            # Model point
+            ax.scatter(year, mv,
+                       color="steelblue", s=80, zorder=3,
+                       label="Model" if yr_idx == 0 else "")
+
+            # Observed point
+            ax.scatter(year, ov,
+                       color="C1", s=80, zorder=3,
+                       label="Observed" if yr_idx == 0 else "")
+
+        ax.set_xlabel("Year")
+        ax.set_ylabel(ylabel)
+        ax.set_title(title)
+        ax.set_xticks(years_labels)
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    fname = f"distance_{region}.png"
+    plt.savefig(fname, dpi=150)
+    print(f"  Saved: {fname}")
+    plt.close()
+# =============================================================================
 # SUMMARY TABLE — prevalence and incidence per region
 # =============================================================================
 
 print("\n" + "=" * 75)
-print(f"{'SUMMARY TABLE — 2010 to 2011':^75}")
+print(f"{'SUMMARY TABLE — 2010 to 2012':^75}")
 print("=" * 75)
 print(f"{'Region':<12} {'Year':<8} {'Prevalence PfPR 2-10 (%)':>26} {'Incidence (/1000/yr)':>22}")
 print("-" * 75)
@@ -143,7 +232,7 @@ for region in REGION_NAMES:
     data = region_data[region]
 
     SYMPTOMATIC_FRACTIONS = [1.0, 0.8, 0.65]
-    E_INDICES             = [1, 8, 15]
+    E_INDICES             = [2, 9, 16]
     idx_g1                = COMPARTMENTS[1]
 
     yearly_prev = []

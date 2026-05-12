@@ -15,6 +15,14 @@ from memilio.simulation import oseirvector
 # 1. OBSERVED DATA — 2010 targets (one value per region)
 # =============================================================================
 
+# observed_2010_2012 = {
+#     "prev_north":  np.array([54.71]),
+#     "inc_north":   np.array([532.99]),
+#     "prev_center": np.array([42.69]),
+#     "inc_center":  np.array([456.79]),
+#     "prev_south":  np.array([26.03]),
+#     "inc_south":   np.array([318.27]),
+#  }
 observed_2010 = {
     "prev_north":  np.array([54.71]),
     "inc_north":   np.array([532.99]),
@@ -23,6 +31,7 @@ observed_2010 = {
     "prev_south":  np.array([26.03]),
     "inc_south":   np.array([318.27]),
 }
+
 
 # =============================================================================
 # 2. FIXED PARAMETERS
@@ -48,13 +57,12 @@ TIME_WANING_IMMUNITY         = 180 #1825.0
 # =============================================================================
 
 COMPARTMENTS = {
-    0: {"S": 0,  "E": 1,  "IA": 2,  "IS": 3,  "R": 4},
-    1: {"S": 7,  "E": 8,  "IA": 9,  "IS": 10, "R": 11},
-    2: {"S": 14, "E": 15, "IA": 16, "IS": 17, "R": 18},
+    0: {"S": 1,  "E": 2,  "IA": 3,  "IS": 4,  "R": 5},
+    1: {"S": 8,  "E": 9,  "IA": 10, "IS": 11, "R": 12},
+    2: {"S": 15, "E": 16, "IA": 17, "IS": 18, "R": 19},
 }
-EXPOSED_INDICES = [1, 8, 15]
-HUMAN_INDICES   = [0, 1, 2, 3, 4, 7, 8, 9, 10, 11, 14, 15, 16, 17, 18]
-
+EXPOSED_INDICES = [2, 9, 16]
+HUMAN_INDICES   = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19]
 # =============================================================================
 # 4. SUMMARY STATISTICS
 # Computes prevalence and incidence after 1 year for each region
@@ -80,23 +88,35 @@ def calculate_summary_stats(results_list, reporting_rate):
         # group 1: p_asymp=0.2  → symptomatic fraction = 0.8
         # group 2: p_asymp=0.35 → symptomatic fraction = 0.65
         SYMPTOMATIC_FRACTIONS = [1.0, 0.8, 0.65]
-        E_INDICES = [1, 8, 15]
+        E_INDICES = [2, 9, 16]
+        idx1 = COMPARTMENTS[1]
 
-        # Daily clinical cases across all groups
-        daily_clinical = sum(
-            SYMPTOMATIC_FRACTIONS[g] * data[:, E_INDICES[g]] / TIME_EXPOSED
-            for g in range(3)
-        )
+        prev_years = []
+        inc_years  = []
 
-        # APPLY REPORTING RATE: diagnosed = clinical * r
-        total_diagnosed = np.sum(daily_clinical) * reporting_rate
+        for yr in range(1):
+            start  = yr * 365
+            end    = start + 365
+            y_data = data[start:end, :]
 
-        pop_at_risk = data[0, HUMAN_INDICES].sum()
-        incidence = (total_diagnosed / pop_at_risk) * 1000
+            # Prevalence PfPR 2-10
+            N_g1 = (y_data[:, idx1["S"]] + y_data[:, idx1["E"]] +
+                    y_data[:, idx1["IA"]] + y_data[:, idx1["IS"]] +
+                    y_data[:, idx1["R"]])
+            inf_g1 = y_data[:, idx1["IA"]] + y_data[:, idx1["IS"]]
+            prev_years.append(np.mean(inf_g1 / np.where(N_g1 == 0, 1, N_g1)) * 100)
 
-        # Return as single-element arrays to match observed_2010 format
-        stats[f"prev_{name}"] = np.array([prevalence])
-        stats[f"inc_{name}"]  = np.array([incidence])
+            # Incidence
+            daily_clinical = sum(
+                SYMPTOMATIC_FRACTIONS[g] * y_data[:, E_INDICES[g]] / TIME_EXPOSED
+                for g in range(1)
+            )
+            pop_at_risk = y_data[0, HUMAN_INDICES].sum()
+            inc_years.append((np.sum(daily_clinical) * reporting_rate / pop_at_risk) * 1000)
+
+        # Return as 3-element arrays matching observed_2010_2012 format
+        stats[f"prev_{name}"] = np.array(prev_years)
+        stats[f"inc_{name}"]  = np.array(inc_years)
 
     return stats
 
@@ -134,22 +154,22 @@ def run_simulation(params):
 # =============================================================================
 
 def distance_prev_north(sim, obs):
-    return np.abs(sim["prev_north"][0] - obs["prev_north"][0]) / 100.0
+    return np.mean(np.abs(sim["prev_north"] - obs["prev_north"])) / 100.0
 
 def distance_inc_north(sim, obs):
-    return np.abs(sim["inc_north"][0] - obs["inc_north"][0]) / 1000.0
+    return np.mean(np.abs(sim["inc_north"] - obs["inc_north"])) / 1000.0
 
 def distance_prev_center(sim, obs):
-    return np.abs(sim["prev_center"][0] - obs["prev_center"][0]) / 100.0
+    return np.mean(np.abs(sim["prev_center"] - obs["prev_center"])) / 100.0
 
 def distance_inc_center(sim, obs):
-    return np.abs(sim["inc_center"][0] - obs["inc_center"][0]) / 1000.0
+    return np.mean(np.abs(sim["inc_center"] - obs["inc_center"])) / 1000.0
 
 def distance_prev_south(sim, obs):
-    return np.abs(sim["prev_south"][0] - obs["prev_south"][0]) / 100.0
+    return np.mean(np.abs(sim["prev_south"] - obs["prev_south"])) / 100.0
 
 def distance_inc_south(sim, obs):
-    return np.abs(sim["inc_south"][0] - obs["inc_south"][0]) / 1000.0
+    return np.mean(np.abs(sim["inc_south"] - obs["inc_south"])) / 1000.0
 
 distance = pyabc.AdaptiveAggregatedDistance(
     [
@@ -168,16 +188,11 @@ distance = pyabc.AdaptiveAggregatedDistance(
 # 7. SANITY CHECK
 # =============================================================================
 
-print("=== SANITY CHECK ===")
 test = run_simulation({"alpha": 1.0, "reporting_rate": 1.0})
-print(f"  alpha=1.0 → prev_north={test['prev_north'][0]:.2f}%, "
-      f"inc_north={test['inc_north'][0]:.2f}")
-print(f"  Target   → prev_north=54.71%,  inc_north=532.99")
-print(f"  alpha=1.0 → prev_south={test['prev_south'][0]:.2f}%, "
-      f"inc_south={test['inc_south'][0]:.2f}")
-print(f"  Target   → prev_south=26.03%,  inc_south=318.27")
-print("====================\n")
-
+print(f"  alpha=1.0 → prev_north year1={test['prev_north'][0]:.2f}%")
+print(f"  Target    → 54.71%")
+print(f"  alpha=1.0 → inc_north year1={test['inc_north'][0]:.2f}")
+print(f"  Target    → 532.99")
 # =============================================================================
 # 8. MAIN — ABC SETUP AND RUN
 # =============================================================================
@@ -185,8 +200,8 @@ print("====================\n")
 if __name__ == "__main__":
 
     prior = pyabc.Distribution(
-        alpha = pyabc.RV("uniform", 0.1, 0.9),  # range: 0.1 to 1.0
-        reporting_rate = pyabc.RV("uniform", 0.01, 0.5)  # Range: 0.2 to 0.8
+        alpha = pyabc.RV("uniform", 0.05, 1),  # range: 0.1 to 1.0
+        reporting_rate = pyabc.RV("uniform", 0.01, 1)  # Range: 0.2 to 0.8
     )
 
     population_size = 500  # small for first test, increase later
