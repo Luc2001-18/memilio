@@ -42,7 +42,7 @@ T0                   = 0.0
 TMAX                 = 365.0
 DT                   = 1.0
 TIME_EXPOSED         = 15.0
-TIME_INFECTED_ASYMPTOMATIC = 80.0
+TIME_INFECTED_ASYMPTOMATIC = 100
 TIME_INFECTED_SYMPTOMATIC  = 7.0
 TRANSMISSION_PROB_ON_CONTACT = 0.1
 ASYMPTOMATIC_PROBABILITY     = 0.287
@@ -81,13 +81,12 @@ def calculate_summary_stats(results_list, reporting_rate):
                 data[:, idx1["IA"]] + data[:, idx1["IS"]] +
                 data[:, idx1["R"]])
         inf_g1     = data[:, idx1["IA"]] + data[:, idx1["IS"]]
-        prevalence = np.mean(inf_g1 / np.where(N_g1 == 0, 1, N_g1)) * 100
-
+        
         # Age-group specific symptomatic fractions (matches C++ AsymptomaticProbability values)
         # group 0: p_asymp=0.0  → symptomatic fraction = 1.0
         # group 1: p_asymp=0.2  → symptomatic fraction = 0.8
         # group 2: p_asymp=0.35 → symptomatic fraction = 0.65
-        SYMPTOMATIC_FRACTIONS = [1.0, 0.8, 0.65]
+        SYMPTOMATIC_FRACTIONS = [0.95, 0.7, 0.3]
         E_INDICES = [2, 9, 16]
         idx1 = COMPARTMENTS[1]
 
@@ -109,7 +108,7 @@ def calculate_summary_stats(results_list, reporting_rate):
             # Incidence
             daily_clinical = sum(
                 SYMPTOMATIC_FRACTIONS[g] * y_data[:, E_INDICES[g]] / TIME_EXPOSED
-                for g in range(1)
+                for g in range(3)
             )
             pop_at_risk = y_data[0, HUMAN_INDICES].sum()
             inc_years.append((np.sum(daily_clinical) * reporting_rate / pop_at_risk) * 1000)
@@ -125,9 +124,12 @@ def calculate_summary_stats(results_list, reporting_rate):
 # =============================================================================
 
 def run_simulation(params):
-    alpha = params["alpha"]
+    #alpha = params["alpha"]
     r = params["reporting_rate"]
-    print(f"  Running with alpha={alpha:.4f}")
+    print(f"  Running with alpha_north={params['alpha_north']:.3f}, "
+      f"alpha_center={params['alpha_center']:.3f}, "
+      f"alpha_south={params['alpha_south']:.3f}, "
+      f"r={params['reporting_rate']:.3f}")
 
     results = oseirvector.simulate(
         t0                           = T0,
@@ -144,7 +146,9 @@ def run_simulation(params):
         BitingRateSouth              = BITING_RATE,
         TransmissionVectorToHuman    =0.27, #0.24,
         TransmissionHumanToVector    =0.02, #0.02,
-        ic_scale                     = alpha,
+        ic_scale_north               = params["alpha_north"],
+        ic_scale_center              = params["alpha_center"],
+        ic_scale_south               = params["alpha_south"],
     )
 
     return calculate_summary_stats(results,r )
@@ -188,7 +192,8 @@ distance = pyabc.AdaptiveAggregatedDistance(
 # 7. SANITY CHECK
 # =============================================================================
 
-test = run_simulation({"alpha": 1.0, "reporting_rate": 1.0})
+test = run_simulation({"alpha_north": 1.0, "alpha_center": 1.0,
+                       "alpha_south": 1.0, "reporting_rate": 1.0})
 print(f"  alpha=1.0 → prev_north year1={test['prev_north'][0]:.2f}%")
 print(f"  Target    → 54.71%")
 print(f"  alpha=1.0 → inc_north year1={test['inc_north'][0]:.2f}")
@@ -200,8 +205,10 @@ print(f"  Target    → 532.99")
 if __name__ == "__main__":
 
     prior = pyabc.Distribution(
-        alpha = pyabc.RV("uniform", 0.05, 1),  # range: 0.1 to 1.0
-        reporting_rate = pyabc.RV("uniform", 0.01, 1)  # Range: 0.2 to 0.8
+    alpha_north    = pyabc.RV("uniform", 0.05, 0.95),
+    alpha_center   = pyabc.RV("uniform", 0.05, 0.95),
+    alpha_south    = pyabc.RV("uniform", 0.05, 0.95),
+    reporting_rate = pyabc.RV("uniform", 0.01, 0.99)
     )
 
     population_size = 500  # small for first test, increase later
@@ -224,13 +231,16 @@ if __name__ == "__main__":
     df, weights = history.get_distribution(m=0, t=history.max_t)
     
     # Calculate weighted means
-    best_alpha = (df["alpha"] * weights).sum()
-    best_r = (df["reporting_rate"] * weights).sum()
+    best_alpha_north  = (df["alpha_north"]  * weights).sum()
+    best_alpha_center = (df["alpha_center"] * weights).sum()
+    best_alpha_south  = (df["alpha_south"]  * weights).sum()
+    best_r            = (df["reporting_rate"] * weights).sum()
 
     print("\n=== ESTIMATED PARAMETERS (Weighted Means) ===")
-    print(f"Alpha:          {best_alpha:.4f}")
+    print(f"Alpha North:    {best_alpha_north:.4f}")
+    print(f"Alpha Center:   {best_alpha_center:.4f}")
+    print(f"Alpha South:    {best_alpha_south:.4f}")
     print(f"Reporting Rate: {best_r:.4f}")
-
     # --- What do the initial conditions look like at best alpha? ---
     print("\n=== INITIAL CONDITIONS AT BEST ALPHA ===")
     prop_E  = [0.01,  0.01,  0.005]
@@ -238,35 +248,38 @@ if __name__ == "__main__":
     prop_IS = [0.01,  0.01,  0.005]
     prop_R  = [0.10,  0.20,  0.30]
     groups  = ["Kids <2y", "Children 2-10y", "Adults"]
-    for i, g in enumerate(groups):
 
-        s = best_alpha * (prop_E[i] + prop_IA[i] + prop_IS[i] + prop_R[i])
-
-        print(f"  {g}: E={best_alpha*prop_E[i]:.4f}  "
-
-              f"IA={best_alpha*prop_IA[i]:.4f}  "
-
-              f"IS={best_alpha*prop_IS[i]:.4f}  "
-
-              f"R={best_alpha*prop_R[i]:.4f}  "
-
-              f"S={1-s:.4f}")
-
+    for region, best_alpha in [("North", best_alpha_north),
+                            ("Center", best_alpha_center),
+                            ("South", best_alpha_south)]:
+        print(f"\n  === {region} (alpha={best_alpha:.4f}) ===")
+        for i, g in enumerate(groups):
+            s = best_alpha * (prop_E[i] + prop_IA[i] + prop_IS[i] + prop_R[i])
+            print(f"    {g}: E={best_alpha*prop_E[i]:.4f}  "
+                f"IA={best_alpha*prop_IA[i]:.4f}  "
+                f"IS={best_alpha*prop_IS[i]:.4f}  "
+                f"R={best_alpha*prop_R[i]:.4f}  "
+                f"S={1-s:.4f}")
     # =============================================================================
     # 9. COMPREHENSIVE PLOTTING
     # =============================================================================
     
     # Plot 1: Alpha Posterior
-    fig, ax = plt.subplots(figsize=(7, 4))
-    ax.hist(df["alpha"], weights=weights, bins=20, color="steelblue", edgecolor="white")
-    ax.axvline(best_alpha, color="red", linewidth=2, label=f"Mean = {best_alpha:.4f}")
-    ax.set_xlabel("Alpha (IC Scale)")
-    ax.set_ylabel("Weighted Count")
-    ax.set_title("Posterior Distribution of Alpha")
-    ax.legend()
-    plt.tight_layout()
-    plt.savefig("alpha_posterior.png", dpi=150)
-    plt.close()
+    for param, best_val, color, label in [
+    ("alpha_north",  best_alpha_north,  "steelblue", "Alpha North"),
+    ("alpha_center", best_alpha_center, "darkorange", "Alpha Center"),
+    ("alpha_south",  best_alpha_south,  "seagreen",  "Alpha South"),
+    ]:
+        fig, ax = plt.subplots(figsize=(7, 4))
+        ax.hist(df[param], weights=weights, bins=20, color=color, edgecolor="white")
+        ax.axvline(best_val, color="red", linewidth=2, label=f"Mean = {best_val:.4f}")
+        ax.set_xlabel(label)
+        ax.set_ylabel("Weighted Count")
+        ax.set_title(f"Posterior Distribution of {label}")
+        ax.legend()
+        plt.tight_layout()
+        plt.savefig(f"{param}_posterior.png", dpi=150)
+        plt.close()
 
     # Plot 2: Reporting Rate Posterior
     fig, ax = plt.subplots(figsize=(7, 4))
@@ -282,14 +295,20 @@ if __name__ == "__main__":
 
     # Plot 3: Parameter Correlation (2D)
     # This is crucial to see if one parameter is "fighting" the other
-    fig, ax = plt.subplots(figsize=(7, 6))
-    scatter = ax.scatter(df["alpha"], df["reporting_rate"], c=weights, cmap="viridis", alpha=0.6)
-    ax.set_xlabel("Alpha")
-    ax.set_ylabel("Reporting Rate")
-    ax.set_title("Parameter Correlation: Alpha vs Reporting Rate")
-    plt.colorbar(scatter, label='Weight')
-    plt.tight_layout()
-    plt.savefig("correlation_plot.png", dpi=150)
-    plt.close()
+    for param, label in [
+        ("alpha_north",  "Alpha North"),
+        ("alpha_center", "Alpha Center"),
+        ("alpha_south",  "Alpha South"),
+    ]:
+        fig, ax = plt.subplots(figsize=(7, 6))
+        scatter = ax.scatter(df[param], df["reporting_rate"],
+                            c=weights, cmap="viridis", alpha=0.6)
+        ax.set_xlabel(label)
+        ax.set_ylabel("Reporting Rate")
+        ax.set_title(f"Correlation: {label} vs Reporting Rate")
+        plt.colorbar(scatter, label='Weight')
+        plt.tight_layout()
+        plt.savefig(f"correlation_{param}.png", dpi=150)
+        plt.close()
 
     print("\nAll plots saved: alpha_posterior.png, reporting_rate_posterior.png, correlation_plot.png")

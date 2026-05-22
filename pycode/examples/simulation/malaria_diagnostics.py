@@ -16,36 +16,40 @@ from memilio.simulation import oseirvector
 BITING_RATE_NORTH  = 0.4
 BITING_RATE_CENTER = 0.4
 BITING_RATE_SOUTH  = 0.4
-REPORTING_RATE =  0.9965
+REPORTING_RATE =  0.6429
 T0   = 0.0
 TMAX = 1095.0   # one year
 DT   = 1.0     # daily resolution
-Alpha = 1.0339
+#alpha = 0.3776
+ALPHA_NORTH  = 0.5748
+ALPHA_CENTER = 0.6934
+ALPHA_SOUTH  = 0.1637
+
 # Fixed parameters (not being calibrated here)
 TIME_EXPOSED                    = 15.0
-TIME_INFECTED_ASYMPTOMATIC      = 80.0
+TIME_INFECTED_ASYMPTOMATIC      = 100 #80.0
 TIME_INFECTED_SYMPTOMATIC       = 7.0
 TRANSMISSION_PROB_ON_CONTACT    = 0.1
 ASYMPTOMATIC_PROBABILITY        = 0.287
-TIME_WANING_IMMUNITY            = 180 #730.0
+TIME_WANING_IMMUNITY            = 180.0 #180 #730.0
 TRANSMISSION_VECTOR_TO_HUMAN    = 0.27 #0.27
 TRANSMISSION_HUMAN_TO_VECTOR    = 0.02
 
-# =============================================================================
-# COMPARTMENT INDEX MAP
-# Group 0 (kids <2):   S=0,  E=1,  IA=2,  IS=3,  R=4,  Sv=5,  Iv=6
-# Group 1 (2-10):      S=7,  E=8,  IA=9,  IS=10, R=11, Sv=12, Iv=13
-# Group 2 (adults):    S=14, E=15, IA=16, IS=17, R=18, Sv=19, Iv=20
-# Group 3 (mosquitos): S=21, E=22, IA=23, IS=24, R=25, Sv=26, Iv=27
-# =============================================================================
+# Time is column 0 — all indices shifted by +1
+# Group 0 (kids <2):   S=1,  E=2,  IA=3,  IS=4,  R=5,  Sv=6,  Iv=7
+# Group 1 (2-10):      S=8,  E=9,  IA=10, IS=11, R=12, Sv=13, Iv=14
+# Group 2 (adults):    S=15, E=16, IA=17, IS=18, R=19, Sv=20, Iv=21
+# Group 3 (mosquitos): S=22, E=23, IA=24, IS=25, R=26, Sv=27, Iv=28
 
 COMPARTMENTS = {
     0: {"S": 1,  "E": 2,  "IA": 3,  "IS": 4,  "R": 5},
     1: {"S": 8,  "E": 9,  "IA": 10, "IS": 11, "R": 12},
     2: {"S": 15, "E": 16, "IA": 17, "IS": 18, "R": 19},
 }
-EXPOSED_INDICES = [2, 9, 16]
+
 HUMAN_INDICES   = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19]
+SYMPTOMATIC_FRACTIONS = [0.95, 0.5, 0.3]
+E_INDICES             = [2, 9, 16]
 
 AGE_GROUP_NAMES = ["Kids < 2y", "Children 2-10y", "Adults 10+"]
 REGION_NAMES    = ["north", "center", "south"]
@@ -65,9 +69,11 @@ OBSERVED = {
 # RUN SIMULATION
 # =============================================================================
 
-print("Running simulation for 3 year...")
+print("Running simulation for 3 years (2010-2012)...")
 print(f"  BitingRates: North={BITING_RATE_NORTH}, "
       f"Center={BITING_RATE_CENTER}, South={BITING_RATE_SOUTH}")
+print(f"  Alpha: North={ALPHA_NORTH}, Center={ALPHA_CENTER}, South={ALPHA_SOUTH}")
+print(f"  Reporting Rate: {REPORTING_RATE}")
 
 results = oseirvector.simulate(
     t0                           = T0,
@@ -84,7 +90,9 @@ results = oseirvector.simulate(
     BitingRateNorth              = BITING_RATE_NORTH,
     BitingRateCenter             = BITING_RATE_CENTER,
     BitingRateSouth              = BITING_RATE_SOUTH,
-    ic_scale                     = Alpha
+    ic_scale_north               = ALPHA_NORTH,
+    ic_scale_center              = ALPHA_CENTER,
+    ic_scale_south               = ALPHA_SOUTH,
 )
 
 # Convert to numpy — shape becomes (timepoints, compartments) after transpose
@@ -148,8 +156,7 @@ years_labels = [2010, 2011, 2012]
 for region in REGION_NAMES:
     data = region_data[region]
 
-    SYMPTOMATIC_FRACTIONS = [1.0, 0.8, 0.65]
-    E_INDICES             = [2, 9, 16]
+    
     idx_g1                = COMPARTMENTS[1]
 
     model_prev = []
@@ -231,14 +238,12 @@ print("-" * 75)
 for region in REGION_NAMES:
     data = region_data[region]
 
-    SYMPTOMATIC_FRACTIONS = [1.0, 0.8, 0.65]
-    E_INDICES             = [2, 9, 16]
     idx_g1                = COMPARTMENTS[1]
 
     yearly_prev = []
     yearly_inc  = []
 
-    for year_idx in range(2):
+    for year_idx in range(3):
         start = year_idx * 365
         end   = start + 365
         y_data = data[start:end, :]
@@ -266,12 +271,6 @@ for region in REGION_NAMES:
         print(f"  {region.capitalize():<10} {year_label:<8} "
               f"{prevalence:>26.2f} {incidence:>22.2f}")
 
-    # Average row
-    avg_prev = np.mean(yearly_prev)
-    avg_inc  = np.mean(yearly_inc)
-    print(f"  {region.capitalize():<10} {'avg':<8} "
-          f"{avg_prev:>26.2f} {avg_inc:>22.2f}")
-    print("-" * 75)
+    print("=" * 75)
+    print("\nDone. Open the .png files in VS Code to view the plots.")
 
-print("=" * 75)
-print("\nDone. Open the .png files in VS Code to view the plots.")
