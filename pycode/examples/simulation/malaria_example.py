@@ -44,10 +44,10 @@ observed_data_dict = {
 
 SYMPTOMATIC_FRACTIONS = [0.95, 0.7, 0.3]
 E_INDICES             = [2, 9, 16]
-REPORTING_RATE        = 0.2888
-ALPHA_NORTH           = 0.6201 #0.5748
-ALPHA_CENTER          = 0.7722 #0.6934
-ALPHA_SOUTH           = 0.7311 #0.1637
+REPORTING_RATE        = 0.5439
+ALPHA_NORTH           = 0.4996 #0.6201 #0.5748
+ALPHA_CENTER          = 0.3902# 0.7722 #0.6934
+ALPHA_SOUTH           = 0.8651 #0.1637
 
 def calculate_summary_stats(results_list):
     start_day = 0  # Day 0 = year 2000; Day 3650 = year 2010
@@ -219,8 +219,8 @@ if __name__ == "__main__":
 
     # --- Prior distributions ---
     prior = pyabc.Distribution(
-        BitingRateNorth  = pyabc.RV("uniform", 0.1, 10.0),
-        BitingRateCenter = pyabc.RV("uniform", 0.1, 1.0),
+        BitingRateNorth  = pyabc.RV("uniform", 0.01, 1.0),
+        BitingRateCenter = pyabc.RV("uniform", 0.01, 1.0),
         BitingRateSouth  = pyabc.RV("uniform", 0.01, 1.0),
     )
 
@@ -234,7 +234,7 @@ if __name__ == "__main__":
     print("=== Sanity check passed ===\n")
 
     # --- ABC setup ---
-    population_size = 100  # increase later for better accuracy
+    population_size = 500  # increase later for better accuracy
 
     abc = pyabc.ABCSMC(
         run_benin_simulation,
@@ -248,7 +248,7 @@ if __name__ == "__main__":
 
     # --- Run calibration ---
     print("=== STARTING CALIBRATION ===")
-    history = abc.run(minimum_epsilon=0.5, max_nr_populations=30)
+    history = abc.run(minimum_epsilon=0.3, max_nr_populations=30)
     print(f"\nCalibration finished. Results saved in {db_path}")
 
     # --- Posterior summary ---

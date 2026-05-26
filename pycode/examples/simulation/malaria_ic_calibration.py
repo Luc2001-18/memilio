@@ -37,7 +37,9 @@ observed_2010 = {
 # 2. FIXED PARAMETERS
 # =============================================================================
 
-BITING_RATE          = 0.4   # same for all regions
+BITING_RATE_NORTH          = 0.5
+BITING_RATE_CENTER         = 0.3
+BITING_RATE_SOUTH          = 0.25
 T0                   = 0.0
 TMAX                 = 365.0
 DT                   = 1.0
@@ -141,9 +143,9 @@ def run_simulation(params):
         TransmissionProbabilityOnContact = TRANSMISSION_PROB_ON_CONTACT,
         AsymptomaticProbability      = ASYMPTOMATIC_PROBABILITY,
         TimeWaningImmunity           = TIME_WANING_IMMUNITY,
-        BitingRateNorth              = BITING_RATE,
-        BitingRateCenter             = BITING_RATE,
-        BitingRateSouth              = BITING_RATE,
+        BitingRateNorth              = BITING_RATE_NORTH,
+        BitingRateCenter             = BITING_RATE_CENTER,
+        BitingRateSouth              = BITING_RATE_SOUTH,
         TransmissionVectorToHuman    =0.27, #0.24,
         TransmissionHumanToVector    =0.02, #0.02,
         ic_scale_north               = params["alpha_north"],
@@ -263,52 +265,67 @@ if __name__ == "__main__":
     # =============================================================================
     # 9. COMPREHENSIVE PLOTTING
     # =============================================================================
-    
-    # Plot 1: Alpha Posterior
-    for param, best_val, color, label in [
-    ("alpha_north",  best_alpha_north,  "steelblue", "Alpha North"),
-    ("alpha_center", best_alpha_center, "darkorange", "Alpha Center"),
-    ("alpha_south",  best_alpha_south,  "seagreen",  "Alpha South"),
-    ]:
-        fig, ax = plt.subplots(figsize=(7, 4))
-        ax.hist(df[param], weights=weights, bins=20, color=color, edgecolor="white")
-        ax.axvline(best_val, color="red", linewidth=2, label=f"Mean = {best_val:.4f}")
+
+    # Figure 1 — Posterior distributions of the three alphas
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+    fig.suptitle("Posterior Distributions of Alpha Parameters", fontsize=14)
+
+    for ax, param, best_val, color, label in zip(
+        axes,
+        ["alpha_north", "alpha_center", "alpha_south"],
+        [best_alpha_north, best_alpha_center, best_alpha_south],
+        ["steelblue", "darkorange", "seagreen"],
+        ["Alpha North", "Alpha Center", "Alpha South"]
+    ):
+        ax.hist(df[param], weights=weights, bins=20,
+                color=color, edgecolor="white", alpha=0.8)
+        ax.axvline(best_val, color="red", linewidth=2,
+                label=f"Mean = {best_val:.4f}")
         ax.set_xlabel(label)
         ax.set_ylabel("Weighted Count")
-        ax.set_title(f"Posterior Distribution of {label}")
+        ax.set_title(label)
         ax.legend()
-        plt.tight_layout()
-        plt.savefig(f"{param}_posterior.png", dpi=150)
-        plt.close()
 
-    # Plot 2: Reporting Rate Posterior
+    plt.tight_layout()
+    plt.savefig("alpha_posteriors.png", dpi=150)
+    plt.close()
+    print("  Saved: alpha_posteriors.png")
+
+    # Figure 2 — Correlation plots: each alpha vs reporting rate
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    fig.suptitle("Correlation: Alpha Parameters vs Reporting Rate", fontsize=14)
+
+    for ax, param, label, color in zip(
+        axes,
+        ["alpha_north", "alpha_center", "alpha_south"],
+        ["Alpha North", "Alpha Center", "Alpha South"],
+        ["steelblue", "darkorange", "seagreen"]
+    ):
+        scatter = ax.scatter(df[param], df["reporting_rate"],
+                            c=weights, cmap="viridis", alpha=0.7, s=30)
+        ax.set_xlabel(label)
+        ax.set_ylabel("Reporting Rate")
+        ax.set_title(f"{label} vs Reporting Rate")
+        plt.colorbar(scatter, ax=ax, label="Weight")
+
+    plt.tight_layout()
+    plt.savefig("alpha_correlation.png", dpi=150)
+    plt.close()
+    print("  Saved: alpha_correlation.png")
+
+    # Figure 3 — Reporting rate posterior
     fig, ax = plt.subplots(figsize=(7, 4))
-    ax.hist(df["reporting_rate"], weights=weights, bins=20, color="seagreen", edgecolor="white")
-    ax.axvline(best_r, color="red", linewidth=2, label=f"Mean = {best_r:.4f}")
-    ax.set_xlabel("Reporting Rate (r)")
+    ax.hist(df["reporting_rate"], weights=weights, bins=20,
+            color="purple", edgecolor="white", alpha=0.8)
+    ax.axvline(best_r, color="red", linewidth=2,
+            label=f"Mean = {best_r:.4f}")
+    ax.set_xlabel("Reporting Rate")
     ax.set_ylabel("Weighted Count")
     ax.set_title("Posterior Distribution of Reporting Rate")
     ax.legend()
     plt.tight_layout()
     plt.savefig("reporting_rate_posterior.png", dpi=150)
     plt.close()
+    print("  Saved: reporting_rate_posterior.png")
 
-    # Plot 3: Parameter Correlation (2D)
-    # This is crucial to see if one parameter is "fighting" the other
-    for param, label in [
-        ("alpha_north",  "Alpha North"),
-        ("alpha_center", "Alpha Center"),
-        ("alpha_south",  "Alpha South"),
-    ]:
-        fig, ax = plt.subplots(figsize=(7, 6))
-        scatter = ax.scatter(df[param], df["reporting_rate"],
-                            c=weights, cmap="viridis", alpha=0.6)
-        ax.set_xlabel(label)
-        ax.set_ylabel("Reporting Rate")
-        ax.set_title(f"Correlation: {label} vs Reporting Rate")
-        plt.colorbar(scatter, label='Weight')
-        plt.tight_layout()
-        plt.savefig(f"correlation_{param}.png", dpi=150)
-        plt.close()
-
-    print("\nAll plots saved: alpha_posterior.png, reporting_rate_posterior.png, correlation_plot.png")
+    print("\nAll plots saved.")
