@@ -42,19 +42,25 @@ observed_data_dict = {
 # Computes prevalence PfPR (age 2-10) and incidence (total population)
 # =============================================================================
 
+SYMPTOMATIC_FRACTIONS = [0.95, 0.7, 0.3]
+E_INDICES             = [2, 9, 16]
+REPORTING_RATE        = 0.2888
+ALPHA_NORTH           = 0.6201 #0.5748
+ALPHA_CENTER          = 0.7722 #0.6934
+ALPHA_SOUTH           = 0.7311 #0.1637
+
 def calculate_summary_stats(results_list):
-    start_day = 3650  # Day 0 = year 2000; Day 3650 = year 2010
+    start_day = 0  # Day 0 = year 2000; Day 3650 = year 2010
     stats = {}
     region_names = ["north", "center", "south"]
 
-    # Compartment indices in the flattened state vector
     # Group 0 (kids <2):   S=0,  E=1,  IA=2,  IS=3,  R=4,  Sv=5,  Iv=6
     # Group 1 (2-10):      S=7,  E=8,  IA=9,  IS=10, R=11, Sv=12, Iv=13
     # Group 2 (adults):    S=14, E=15, IA=16, IS=17, R=18, Sv=19, Iv=20
     # Group 3 (mosquitos): S=21, E=22, IA=23, IS=24, R=25, Sv=26, Iv=27
 
-    exposed_indices = [1, 8, 15]
-    human_indices   = [0, 1, 2, 3, 4, 7, 8, 9, 10, 11, 14, 15, 16, 17, 18]
+    exposed_indices = [2, 9, 16]
+    human_indices   = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19]
 
     for i, name in enumerate(region_names):
         # results_list[i] is already a numpy array (shape: compartments x timepoints)
@@ -67,17 +73,19 @@ def calculate_summary_stats(results_list):
             y_data = data[year * 365 : (year + 1) * 365, :]
 
             # Prevalence PfPR 2-10: (IA + IS) / total_2_10
-            pop_2_10 = y_data[:, 7:12].sum(axis=1)
-            inf_2_10 = y_data[:, 9] + y_data[:, 10]
+            pop_2_10 = y_data[:, 8:13].sum(axis=1)
+            inf_2_10 = y_data[:, 10] + y_data[:, 11]
             prev_years.append(
                 np.mean(inf_2_10 / np.where(pop_2_10 == 0, 1, pop_2_10)) * 100
             )
 
             # Incidence: new cases per 1000 people per year
-            # Approximated as daily flow E -> I = E / TimeExposed, summed over year
-            new_cases = np.sum(y_data[:, exposed_indices].sum(axis=1) / 15.0)
-            pop_total = y_data[:, human_indices].sum(axis=1).mean()
-            inc_years.append((new_cases / pop_total) * 1000)
+            daily_new = sum(
+                SYMPTOMATIC_FRACTIONS[g] * y_data[:, E_INDICES[g]] / 15.0
+                for g in range(3)
+            )
+            pop_at_risk = y_data[0, human_indices].sum()
+            inc_years.append((np.sum(daily_new) * REPORTING_RATE / pop_at_risk) * 1000)
 
         stats[f"prev_{name}"] = np.array(prev_years)
         stats[f"inc_{name}"]  = np.array(inc_years)
@@ -99,17 +107,20 @@ def run_benin_simulation(params):
 
     results = oseirvector.simulate(
         t0                           = 0.0,
-        tmax                         = 6935.0,
+        tmax                         = 3285.0,
         dt                           = 1.0,
         TimeExposed                  = 15.0,
-        TimeInfectedAsymptomatic     = 80.0,
+        TimeInfectedAsymptomatic     = 100.0,
         TimeInfectedSymptomatic      = 7.0,
         TransmissionProbabilityOnContact = 0.1,
         AsymptomaticProbability      = 0.287,
         TimeWaningImmunity           = 180, #730.0,
         BitingRateNorth              = params["BitingRateNorth"],
         BitingRateCenter             = params["BitingRateCenter"],
-        BitingRateSouth              = params["BitingRateSouth"]
+        BitingRateSouth              = params["BitingRateSouth"],
+        ic_scale_north               = ALPHA_NORTH,
+        ic_scale_center              = ALPHA_CENTER,
+        ic_scale_south               = ALPHA_SOUTH,
     )
 
     return calculate_summary_stats(results)
@@ -157,10 +168,6 @@ distance = pyabc.AdaptiveAggregatedDistance(
 # =============================================================================
 
 def plot_region(history, region_name, observed_data_dict, output_dir="."):
-    """
-    Plots simulated trajectories vs observed data for one region.
-    Saves as <region_name>.png
-    """
     prev_key = f"prev_{region_name}"
     inc_key  = f"inc_{region_name}"
     years    = np.arange(2010, 2019)
@@ -168,37 +175,32 @@ def plot_region(history, region_name, observed_data_dict, output_dir="."):
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     fig.suptitle(f"Benin Malaria — {region_name.capitalize()} Region", fontsize=14)
 
+    sims, weights = history.get_distribution(m=0, t=history.max_t)
+    all_sim_data = {prev_key: [], inc_key: []}
+    w_array = []
+
+    for (_, row), w in zip(sims.iterrows(), weights):
+        sim_result = run_benin_simulation(dict(row))
+        all_sim_data[prev_key].append(sim_result[prev_key])
+        all_sim_data[inc_key].append(sim_result[inc_key])
+        w_array.append(w)
+
+    w_array = np.array(w_array)
+    w_array /= w_array.sum()
+
     for ax, key, ylabel, title in zip(
         axes,
         [prev_key, inc_key],
         ["Prevalence PfPR 2-10 (%)", "Incidence (per 1000/year)"],
         ["Prevalence", "Incidence"]
     ):
-    
-        # Plot all accepted simulations from last population (grey)
-        sims, weights = history.get_distribution(m=0, t=history.max_t)
-        for _, row in sims.iterrows():
-            sim_result = run_benin_simulation(dict(row))
-            print(f"  {key}: {sim_result[key]}")  # ADD THIS
-          #  ax.plot(years, sim_result[key], color="grey", alpha=0.1)
-            ax.scatter(years, sim_result[key], color="grey", alpha=0.2, s=20)
-
-        # Plot observed data
+        for sim_vals in all_sim_data[key]:
+            ax.scatter(years, sim_vals, color="grey", alpha=0.2, s=20)
         ax.scatter(years, observed_data_dict[key],
                    color="C1", zorder=3, label="Observed data")
-
-        # Plot weighted mean
-        all_sim_data = []
-        w_array = []
-        for (_, row), w in zip(sims.iterrows(), weights):
-            sim_result = run_benin_simulation(dict(row))
-            all_sim_data.append(sim_result[key])
-            w_array.append(w)
-        w_array  = np.array(w_array)
-        w_array /= w_array.sum()
-        mean     = (np.array(all_sim_data) * w_array[:, None]).sum(axis=0)
-        #ax.plot(years, mean, color="C2", label="Simulation mean", linewidth=2)
-        ax.scatter(years, mean, color="C2", zorder=3, label="Simulation mean", s=20, marker="D")
+        mean = (np.array(all_sim_data[key]) * w_array[:, None]).sum(axis=0)
+        ax.scatter(years, mean, color="C2", zorder=3,
+                   label="Simulation mean", s=20, marker="D")
         ax.set_xlabel("Year")
         ax.set_ylabel(ylabel)
         ax.set_title(title)
@@ -209,7 +211,6 @@ def plot_region(history, region_name, observed_data_dict, output_dir="."):
     plt.savefig(save_path)
     print(f"  Figure saved: {save_path}")
     plt.close()
-
 # =============================================================================
 # MAIN — PRIOR, ABC SETUP, RUN, RESULTS
 # =============================================================================
@@ -218,9 +219,9 @@ if __name__ == "__main__":
 
     # --- Prior distributions ---
     prior = pyabc.Distribution(
-    BitingRateNorth  = pyabc.RV("uniform", 0.3, 0.5),
-    BitingRateCenter = pyabc.RV("uniform", 0.3, 0.5),
-    BitingRateSouth  = pyabc.RV("uniform", 0.3, 0.5),
+        BitingRateNorth  = pyabc.RV("uniform", 0.1, 10.0),
+        BitingRateCenter = pyabc.RV("uniform", 0.1, 1.0),
+        BitingRateSouth  = pyabc.RV("uniform", 0.01, 1.0),
     )
 
     # --- Quick sanity check before launching ABC ---
@@ -251,9 +252,49 @@ if __name__ == "__main__":
     print(f"\nCalibration finished. Results saved in {db_path}")
 
     # --- Posterior summary ---
+    # --- Posterior summary ---
     df, weights = history.get_distribution(m=0, t=history.max_t)
-    print("\n=== ESTIMATED BITING RATES (posterior summary) ===")
-    print(df[["BitingRateNorth", "BitingRateCenter", "BitingRateSouth"]].describe())
+
+    best_north  = (df["BitingRateNorth"]  * weights).sum()
+    best_center = (df["BitingRateCenter"] * weights).sum()
+    best_south  = (df["BitingRateSouth"]  * weights).sum()
+
+    print("\n" + "=" * 50)
+    print(f"{'ESTIMATED BITING RATES':^50}")
+    print("=" * 50)
+    print(f"  North  (weighted mean): {best_north:.4f}")
+    print(f"  Center (weighted mean): {best_center:.4f}")
+    print(f"  South  (weighted mean): {best_south:.4f}")
+    print("-" * 50)
+    print(f"{'Full posterior distribution':^50}")
+    print("-" * 50)
+    print(df[["BitingRateNorth", "BitingRateCenter", "BitingRateSouth"]].describe().to_string())
+    print("=" * 50)
+
+    # --- Posterior plots ---
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+    fig.suptitle("Posterior Distributions of Biting Rates", fontsize=14)
+
+    for ax, param, best_val, color, label in zip(
+        axes,
+        ["BitingRateNorth", "BitingRateCenter", "BitingRateSouth"],
+        [best_north, best_center, best_south],
+        ["steelblue", "darkorange", "seagreen"],
+        ["North", "Center", "South"]
+    ):
+        ax.hist(df[param], weights=weights, bins=20,
+                color=color, edgecolor="white", alpha=0.8)
+        ax.axvline(best_val, color="red", linewidth=2,
+                label=f"Mean = {best_val:.4f}")
+        ax.set_xlabel(f"Biting Rate {label}")
+        ax.set_ylabel("Weighted Count")
+        ax.set_title(f"{label} Region")
+        ax.legend()
+
+    plt.tight_layout()
+    plt.savefig("biting_rates_posterior.png", dpi=150)
+    plt.close()
+    print("\nPosterior plot saved: biting_rates_posterior.png")
 
     # --- Plots: one figure per region ---
     print("\n=== GENERATING FIGURES ===")

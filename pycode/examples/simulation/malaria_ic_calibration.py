@@ -205,7 +205,7 @@ print(f"  Target    → 532.99")
 if __name__ == "__main__":
 
     prior = pyabc.Distribution(
-    alpha_north    = pyabc.RV("uniform", 0.05, 0.95),
+    alpha_north    = pyabc.RV("uniform", 0.01, 0.95),
     alpha_center   = pyabc.RV("uniform", 0.05, 0.95),
     alpha_south    = pyabc.RV("uniform", 0.05, 0.95),
     reporting_rate = pyabc.RV("uniform", 0.01, 0.99)
