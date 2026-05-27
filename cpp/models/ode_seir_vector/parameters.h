@@ -169,6 +169,18 @@ struct MosquitoBitingRate {
     static std::string name() { return "MosquitoBitingRate"; }
 };
 
+/**
+ * @brief Effective biting rate taking into account ITN Use
+*/
+ 
+template <typename FP>
+struct EffectiveBitingRate {
+    using Type = Eigen::Matrix<FP, 9, 1>;
+    static Type get_default() { return Type::Constant(0.3); }
+    static std::string name() { return "EffectiveBitingRate"; }
+};
+
+
 
 /**
  * @brief Probability to be asymptomatic by leaving Exposed Compartment
@@ -223,7 +235,7 @@ template <typename FP>
 using ParametersBase =
     ParameterSet<TransmissionProbabilityOnContact<FP>, TimeExposed<FP>, TimeInfectedAsymptomatic<FP>, TimeInfectedSymptomatic<FP>, AsymptomaticProbability<FP>, TimeWaningImmunity<FP>, ContactPatterns<FP>,
      MosquitoBirthRate<FP>, TransmissionHumanToVector<FP>, TransmissionVectorToHuman<FP>, MosquitoDeathRate<FP>, 
-     MosquitoBitingRate<FP>, SeasonalityAmp1<FP>,SeasonalityAmp2<FP>, SeasonalityPhi1<FP>, SeasonalityPhi2<FP>, SeasonalityPeak<FP> >;
+     MosquitoBitingRate<FP>, EffectiveBitingRate<FP>, SeasonalityAmp1<FP>,SeasonalityAmp2<FP>, SeasonalityPhi1<FP>, SeasonalityPhi2<FP>, SeasonalityPeak<FP> >;
 
 /**
  * @brief Parameters of an age-resolved SECIR/SECIHURD model.

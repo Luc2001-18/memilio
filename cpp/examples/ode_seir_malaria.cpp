@@ -28,13 +28,16 @@
 #include "memilio/mobility/metapopulation_mobility_instant.h"
 #include "memilio/mobility/graph.h"
 
-auto simulate(ScalarType t0 = 0, ScalarType tmax = 6940, ScalarType dt = 0.1, ScalarType TimeExposed = 15.0,
-              ScalarType TimeInfectedAsymptomatic = 30.0, ScalarType TimeInfectedSymptomatic = 7.0,
+auto simulate(ScalarType t0 = 0, ScalarType tmax = 3285.0, ScalarType dt = 0.1, ScalarType TimeExposed = 15.0,
+              ScalarType TimeInfectedAsymptomatic = 100.0, ScalarType TimeInfectedSymptomatic = 7.0,
               ScalarType TransmissionProbabilityOnContact = 0.1, ScalarType AsymptomaticProbability = 0.287,
               ScalarType TimeWaningImmunity = 180.0, ScalarType BitingRateNorth = 0.4,
               ScalarType BitingRateCenter = 0.4, ScalarType BitingRateSouth = 0.4,
             ScalarType TransmissionVectorToHuman = 0.27, ScalarType TransmissionHumanToVector = 0.02,
-            ScalarType ic_scale = 0.9310) //, ScalarType ic_scale_north = 1.8, ScalarType ic_scale_south = 0.6)
+            ScalarType ic_scale_north = 0.5,
+            ScalarType ic_scale_center = 0.5,
+            ScalarType ic_scale_south = 0.5)
+            // ScalarType ic_scale = 0.9310) //, ScalarType ic_scale_north = 1.8, ScalarType ic_scale_south = 0.6)
 {
     mio::set_log_level(mio::LogLevel::warn);
 
@@ -56,7 +59,7 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 6940, ScalarType dt = 0.1, Sc
     ScalarType prop_vector_infected   = 0.01;
    // ScalarType ic_scale = 0.8; // reduce all infected compartments by half — change this one number
     for (size_t i = 0; i < 3; ++i) {
-        ScalarType prop_S = 1.0 - ic_scale * (prop_E[i] + prop_IA[i] + prop_IS[i] + prop_R[i]);
+        ScalarType prop_S = 1.0 - (prop_E[i] + prop_IA[i] + prop_IS[i] + prop_R[i]);
         assert(prop_S > 0.0 && "Proportions sum to >= 1.0 for this age group!");
 
         model.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Susceptible}]          = prop_S;
@@ -107,12 +110,14 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 6940, ScalarType dt = 0.1, Sc
         model.parameters.get<mio::oseirvector::TimeWaningImmunity<ScalarType>>()[mio::AgeGroup(i)] =
             TimeWaningImmunity; // Data Estimated
     }
+    model.parameters.get<mio::oseirvector::TimeWaningImmunity<ScalarType>>()[mio::AgeGroup(0)] = 15;
+    model.parameters.get<mio::oseirvector::TimeWaningImmunity<ScalarType>>()[mio::AgeGroup(1)] = 30;
     // Age_group dependant parameters
     model.parameters.get<mio::oseirvector::AsymptomaticProbability<ScalarType>>()[mio::AgeGroup(0)] =
-        0.0; // asumption of the model for under 2
-    model.parameters.get<mio::oseirvector::AsymptomaticProbability<ScalarType>>()[mio::AgeGroup(1)] = 0.2; // Data based
+       0.05; // 0.0; // asumption of the model for under 2
+    model.parameters.get<mio::oseirvector::AsymptomaticProbability<ScalarType>>()[mio::AgeGroup(1)] = 0.3; //0.2; // Data based
     model.parameters.get<mio::oseirvector::AsymptomaticProbability<ScalarType>>()[mio::AgeGroup(2)] =
-      0.35; // Data based
+     0.7; // 0.35; // Data based
 
     // All this is Dummy values
     model.parameters.get<mio::oseirvector::TimeExposed<ScalarType>>()[mio::AgeGroup(3)] = 1.0; // Dummy value
@@ -133,38 +138,67 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 6940, ScalarType dt = 0.1, Sc
     auto model_center = model;
     auto model_south  = model;
 
- /*   ScalarType north_factor = ic_scale_north / ic_scale;  // ratio relative to center
-    ScalarType south_factor = ic_scale_south / ic_scale;
-
+    // Apply region-specific IC scaling
     for (size_t i = 0; i < 3; ++i) {
-        // North — multiply infected compartments by north_factor
-        model_north.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Exposed}]              *= north_factor;
-        model_north.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::InfectedAsymptomatic}] *= north_factor;
-        model_north.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::InfectedSymptomatic}]  *= north_factor;
-        model_north.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Recovered}]            *= north_factor;
-        model_north.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Susceptible}]           = 
-            1.0 - north_factor * ic_scale * (prop_E[i] + prop_IA[i] + prop_IS[i] + prop_R[i]);
+        // North
+        model_north.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Susceptible}] =
+            1.0 - ic_scale_north * (prop_E[i] + prop_IA[i] + prop_IS[i] + prop_R[i]);
+        model_north.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Exposed}]              = ic_scale_north * prop_E[i];
+        model_north.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::InfectedAsymptomatic}] = ic_scale_north * prop_IA[i];
+        model_north.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::InfectedSymptomatic}]  = ic_scale_north * prop_IS[i];
+        model_north.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Recovered}]            = ic_scale_north * prop_R[i];
 
-        // South — multiply infected compartments by south_factor
-        model_south.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Exposed}]              *= south_factor;
-        model_south.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::InfectedAsymptomatic}] *= south_factor;
-        model_south.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::InfectedSymptomatic}]  *= south_factor;
-        model_south.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Recovered}]            *= south_factor;
-        model_south.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Susceptible}]           =
-            1.0 - south_factor * ic_scale * (prop_E[i] + prop_IA[i] + prop_IS[i] + prop_R[i]);
+        // Center
+        model_center.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Susceptible}] =
+            1.0 - ic_scale_center * (prop_E[i] + prop_IA[i] + prop_IS[i] + prop_R[i]);
+        model_center.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Exposed}]              = ic_scale_center * prop_E[i];
+        model_center.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::InfectedAsymptomatic}] = ic_scale_center * prop_IA[i];
+        model_center.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::InfectedSymptomatic}]  = ic_scale_center * prop_IS[i];
+        model_center.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Recovered}]            = ic_scale_center * prop_R[i];
+
+        // South
+        model_south.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Susceptible}] =
+            1.0 - ic_scale_south * (prop_E[i] + prop_IA[i] + prop_IS[i] + prop_R[i]);
+        model_south.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Exposed}]              = ic_scale_south * prop_E[i];
+        model_south.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::InfectedAsymptomatic}] = ic_scale_south * prop_IA[i];
+        model_south.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::InfectedSymptomatic}]  = ic_scale_south * prop_IS[i];
+        model_south.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Recovered}]            = ic_scale_south * prop_R[i];
     }
 
-*/
 
 
+    model_north.parameters.set<mio::oseirvector::MosquitoBitingRate<ScalarType>>(BitingRateNorth); 
+    model_center.parameters.set<mio::oseirvector::MosquitoBitingRate<ScalarType>>(BitingRateCenter); 
+    model_south.parameters.set<mio::oseirvector::MosquitoBitingRate<ScalarType>>(BitingRateSouth);
 
-    model_north.parameters.set<mio::oseirvector::MosquitoBitingRate<ScalarType>>(
-        BitingRateNorth); // Mosquito bites a human every ~4 days
-    model_center.parameters.set<mio::oseirvector::MosquitoBitingRate<ScalarType>>(
-        BitingRateCenter); // Mosquito bites a human every ~4 days
-    model_south.parameters.set<mio::oseirvector::MosquitoBitingRate<ScalarType>>(
-        BitingRateSouth); // Mosquito bites a human every ~4 days
-        
+     
+    // ITN coverage data — national average Benin 2010-2018 (MAP, Use per 100 people / 100)
+    // Effectiveness fixed at 0.5 (community-level LLIN effect from literature)
+    const ScalarType itn_effectiveness = 0.5;
+    std::array<ScalarType, 9> itn_use = {
+        0.2421,  // 2010
+        0.6275,  // 2011 — mass distribution campaign
+        0.5268,  // 2012
+        0.1809,  // 2013 — sharp drop
+        0.2280,  // 2014
+        0.2793,  // 2015
+        0.1380,  // 2016 — another drop
+        0.5668,  // 2017 — second campaign
+        0.6301   // 2018
+    };
+
+    Eigen::Matrix<ScalarType, 9, 1> ebr_north, ebr_center, ebr_south;
+    for (int yr = 0; yr < 9; ++yr) {
+        ScalarType damping = 1.0 - itn_use[yr] * itn_effectiveness;
+        ebr_north[yr]  = BitingRateNorth  * damping;
+        ebr_center[yr] = BitingRateCenter * damping;
+        ebr_south[yr]  = BitingRateSouth  * damping;
+    }
+
+    model_north.parameters.set<mio::oseirvector::EffectiveBitingRate<ScalarType>>(ebr_north);
+    model_center.parameters.set<mio::oseirvector::EffectiveBitingRate<ScalarType>>(ebr_center);
+    model_south.parameters.set<mio::oseirvector::EffectiveBitingRate<ScalarType>>(ebr_south);
+         
 /*/ Mainly Asuumptions but based in the litterature just to check somthing
         // North: single rainy season (Sahelian)
     model_north.parameters.set<mio::oseirvector::SeasonalityAmp1<ScalarType>>(0.6);
@@ -201,8 +235,8 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 6940, ScalarType dt = 0.1, Sc
     };
     
     set_patch_population(model_north,  4639811.0, 1.5*4639811.0);   // 0.5:1 2319905.0
-    set_patch_population(model_center, 2457289.0, 1.1*1228644.0);   // 0.5:1 1228644.0
-    set_patch_population(model_south,  7548534.0, 3774267.0);   // 0.5:1
+    set_patch_population(model_center, 2457289.0, 2*1228644.0);   // 0.5:1 1228644.0
+    set_patch_population(model_south,  7548534.0, 1.5 * 3774267.0);   // 0.5:1
     //set_patch_population(model_north,  4639811.0, 1000000.0); //  4639811.0);   // 1:1
     //set_patch_population(model_center, 2457289.0, 1000000.0);// 1965831.0);   // 0.8:1
     //set_patch_population(model_south,  7548534.0, 1000000.0); //  11322801.0);  // 1.5:1
