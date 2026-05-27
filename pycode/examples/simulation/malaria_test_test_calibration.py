@@ -273,7 +273,7 @@ if __name__ == "__main__":
     print("=== Sanity check done ===\n")
 
     # --- ABC setup ---
-    population_size = 100
+    population_size = 200
 
     abc = pyabc.ABCSMC(
         run_simulation,
@@ -287,7 +287,7 @@ if __name__ == "__main__":
 
     # --- Run ---
     print("=== STARTING FULL CALIBRATION ===")
-    history = abc.run(minimum_epsilon=0.3, max_nr_populations=20)
+    history = abc.run(minimum_epsilon=0.05, max_nr_populations=20)
     print(f"\nCalibration finished. Results saved in {db_path}")
 
     # --- Posterior summary ---
