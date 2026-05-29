@@ -30,7 +30,7 @@ observed_data = {
 # 2. FIXED PARAMETERS
 # =============================================================================
 
-TMAX                         = 3285.0   # 9 years: 2010-2018
+TMAX                         = 6935.0   # 9 years: 2010-2018
 DT                           = 1.0
 TIME_EXPOSED                 = 15.0
 TIME_INFECTED_ASYMPTOMATIC   = 100.0
@@ -67,8 +67,13 @@ def calculate_summary_stats(results_list, reporting_rate):
         prev_years = []
         inc_years  = []
 
+        spin_up_days = 3650  # 10 years: 2000-2009
         for year in range(9):
-            y_data = data[year * 365 : (year + 1) * 365, :]
+            start = spin_up_days + year * 365
+            end   = start + 365
+            y_data = data[start:end, :]
+        #for year in range(9):
+         #   y_data = data[year * 365 : (year + 1) * 365, :]
 
             # Prevalence PfPR 2-10: mean(IA_g1 + IS_g1) / N_g1
             pop_2_10 = y_data[:, 8:13].sum(axis=1)
@@ -99,8 +104,8 @@ def calculate_summary_stats(results_list, reporting_rate):
 def run_simulation(params):
     print(f"  BR=({params['BitingRateNorth']:.3f}, "
           f"{params['BitingRateCenter']:.3f}, {params['BitingRateSouth']:.3f}) "
-          f"alpha=({params['alpha_north']:.3f}, "
-          f"{params['alpha_center']:.3f}, {params['alpha_south']:.3f}) "
+         # f"alpha=({params['alpha_north']:.3f}, "
+         # f"{params['alpha_center']:.3f}, {params['alpha_south']:.3f}) "
           f"r={params['reporting_rate']:.3f}")
 
     results = oseirvector.simulate(
@@ -118,9 +123,9 @@ def run_simulation(params):
         BitingRateNorth              = params["BitingRateNorth"],
         BitingRateCenter             = params["BitingRateCenter"],
         BitingRateSouth              = params["BitingRateSouth"],
-        ic_scale_north               = params["alpha_north"],
-        ic_scale_center              = params["alpha_center"],
-        ic_scale_south               = params["alpha_south"],
+        ic_scale_north               = 1.0,
+        ic_scale_center              = 1.0,
+        ic_scale_south               = 1.0,
     )
 
     return calculate_summary_stats(results, params["reporting_rate"])
@@ -215,13 +220,10 @@ def plot_posteriors(df, weights, best_vals, output_dir="."):
         ("BitingRateNorth",  best_vals["br_north"],   "steelblue",  "Biting Rate North"),
         ("BitingRateCenter", best_vals["br_center"],  "darkorange", "Biting Rate Center"),
         ("BitingRateSouth",  best_vals["br_south"],   "seagreen",   "Biting Rate South"),
-        ("alpha_north",      best_vals["alpha_north"], "steelblue", "Alpha North"),
-        ("alpha_center",     best_vals["alpha_center"],"darkorange","Alpha Center"),
-        ("alpha_south",      best_vals["alpha_south"], "seagreen",  "Alpha South"),
         ("reporting_rate",   best_vals["r"],           "purple",    "Reporting Rate"),
     ]
 
-    fig, axes = plt.subplots(2, 4, figsize=(20, 8))
+    fig, axes = plt.subplots(2, 4, figsize=(20, 4))
     fig.suptitle("Posterior Distributions — All Parameters", fontsize=14)
 
     for ax, (param, best_val, color, label) in zip(axes.flatten(), params_info):
@@ -234,7 +236,7 @@ def plot_posteriors(df, weights, best_vals, output_dir="."):
         ax.set_title(label)
         ax.legend(fontsize=8)
 
-    axes.flatten()[-1].set_visible(False)
+   # axes.flatten()[-1].set_visible(False)
     plt.tight_layout()
     save_path = os.path.join(output_dir, "all_parameters_posterior.png")
     plt.savefig(save_path, dpi=150)
@@ -249,9 +251,9 @@ if __name__ == "__main__":
 
     # --- Prior ---
     prior = pyabc.Distribution(
-        alpha_north      = pyabc.RV("uniform", 0.01, 0.99),
-        alpha_center     = pyabc.RV("uniform", 0.01, 0.99),
-        alpha_south      = pyabc.RV("uniform", 0.01, 0.99),
+    #    alpha_north      = pyabc.RV("uniform", 0.01, 0.99),
+    #    alpha_center     = pyabc.RV("uniform", 0.01, 0.99),
+    #    alpha_south      = pyabc.RV("uniform", 0.01, 0.99),
         reporting_rate   = pyabc.RV("uniform", 0.01, 0.99),
         BitingRateNorth  = pyabc.RV("uniform", 0.1, 0.8),
         BitingRateCenter = pyabc.RV("uniform", 0.1, 0.8),
@@ -261,7 +263,7 @@ if __name__ == "__main__":
     # --- Sanity check ---
     print("=== SANITY CHECK ===")
     test_params = {
-        "alpha_north": 0.5, "alpha_center": 0.5, "alpha_south": 0.5,
+    #    "alpha_north": 0.5, "alpha_center": 0.5, "alpha_south": 0.5,
         "reporting_rate": 0.45,
         "BitingRateNorth": 0.5, "BitingRateCenter": 0.3, "BitingRateSouth": 0.25,
     }
@@ -297,9 +299,9 @@ if __name__ == "__main__":
         "br_north":    (df["BitingRateNorth"]  * weights).sum(),
         "br_center":   (df["BitingRateCenter"] * weights).sum(),
         "br_south":    (df["BitingRateSouth"]  * weights).sum(),
-        "alpha_north":  (df["alpha_north"]  * weights).sum(),
-        "alpha_center": (df["alpha_center"] * weights).sum(),
-        "alpha_south":  (df["alpha_south"]  * weights).sum(),
+   #     "alpha_north":  (df["alpha_north"]  * weights).sum(),
+   #     "alpha_center": (df["alpha_center"] * weights).sum(),
+   #     "alpha_south":  (df["alpha_south"]  * weights).sum(),
         "r":            (df["reporting_rate"] * weights).sum(),
     }
 
@@ -317,9 +319,9 @@ if __name__ == "__main__":
     print(f"  Biting Rate North:   {best_vals['br_north']:.4f}")
     print(f"  Biting Rate Center:  {best_vals['br_center']:.4f}")
     print(f"  Biting Rate South:   {best_vals['br_south']:.4f}")
-    print(f"  Alpha North:         {best_vals['alpha_north']:.4f}")
-    print(f"  Alpha Center:        {best_vals['alpha_center']:.4f}")
-    print(f"  Alpha South:         {best_vals['alpha_south']:.4f}")
+#    print(f"  Alpha North:         {best_vals['alpha_north']:.4f}")
+#    print(f"  Alpha Center:        {best_vals['alpha_center']:.4f}")
+#    print(f"  Alpha South:         {best_vals['alpha_south']:.4f}")
     print(f"  Reporting Rate:      {best_vals['r']:.4f}")
     print("=" * 55)
 

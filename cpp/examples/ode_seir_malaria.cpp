@@ -28,15 +28,15 @@
 #include "memilio/mobility/metapopulation_mobility_instant.h"
 #include "memilio/mobility/graph.h"
 
-auto simulate(ScalarType t0 = 0, ScalarType tmax = 3285.0, ScalarType dt = 0.1, ScalarType TimeExposed = 15.0,
+auto simulate(ScalarType t0 = 0, ScalarType tmax = 6935.0, ScalarType dt = 0.1, ScalarType TimeExposed = 15.0,
               ScalarType TimeInfectedAsymptomatic = 100.0, ScalarType TimeInfectedSymptomatic = 7.0,
               ScalarType TransmissionProbabilityOnContact = 0.1, ScalarType AsymptomaticProbability = 0.287,
               ScalarType TimeWaningImmunity = 180.0, ScalarType BitingRateNorth = 0.4,
               ScalarType BitingRateCenter = 0.4, ScalarType BitingRateSouth = 0.4,
             ScalarType TransmissionVectorToHuman = 0.27, ScalarType TransmissionHumanToVector = 0.02,
-            ScalarType ic_scale_north = 0.5,
-            ScalarType ic_scale_center = 0.5,
-            ScalarType ic_scale_south = 0.5)
+            ScalarType ic_scale_north = 1.0,
+            ScalarType ic_scale_center= 1.0,
+            ScalarType ic_scale_south = 1.0)
             // ScalarType ic_scale = 0.9310) //, ScalarType ic_scale_north = 1.8, ScalarType ic_scale_south = 0.6)
 {
     mio::set_log_level(mio::LogLevel::warn);
@@ -175,7 +175,17 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 3285.0, ScalarType dt = 0.1, 
     // ITN coverage data — national average Benin 2010-2018 (MAP, Use per 100 people / 100)
     // Effectiveness fixed at 0.5 (community-level LLIN effect from literature)
     const ScalarType itn_effectiveness = 0.5;
-    std::array<ScalarType, 9> itn_use = {
+    std::array<ScalarType, 19> itn_use = {
+        0.0711,  // 2000
+        0.0413,  // 2001
+        0.0213,  // 2002
+        0.0209,  // 2003
+        0.0339,  // 2004
+        0.0310,  // 2005
+        0.0365,  // 2006
+        0.1795,  // 2007
+        0.1371,  // 2008
+        0.1203,  // 2009
         0.2421,  // 2010
         0.6275,  // 2011 — mass distribution campaign
         0.5268,  // 2012
@@ -187,8 +197,8 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 3285.0, ScalarType dt = 0.1, 
         0.6301   // 2018
     };
 
-    Eigen::Matrix<ScalarType, 9, 1> ebr_north, ebr_center, ebr_south;
-    for (int yr = 0; yr < 9; ++yr) {
+    Eigen::Matrix<ScalarType, 19, 1> ebr_north, ebr_center, ebr_south;
+    for (int yr = 0; yr < 19; ++yr) {
         ScalarType damping = 1.0 - itn_use[yr] * itn_effectiveness;
         ebr_north[yr]  = BitingRateNorth  * damping;
         ebr_center[yr] = BitingRateCenter * damping;
