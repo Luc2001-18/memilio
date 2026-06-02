@@ -173,13 +173,13 @@ struct MosquitoBitingRate {
  * @brief Effective biting rate taking into account ITN Use
 */
  
+ 
 template <typename FP>
 struct EffectiveBitingRate {
-    using Type = Eigen::Matrix<FP, 19, 1>;
+    using Type = Eigen::Matrix<FP, 9, 1>;
     static Type get_default() { return Type::Constant(0.3); }
     static std::string name() { return "EffectiveBitingRate"; }
 };
-
 
 
 /**

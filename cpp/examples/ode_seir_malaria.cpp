@@ -28,15 +28,18 @@
 #include "memilio/mobility/metapopulation_mobility_instant.h"
 #include "memilio/mobility/graph.h"
 
-auto simulate(ScalarType t0 = 0, ScalarType tmax = 6935.0, ScalarType dt = 0.1, ScalarType TimeExposed = 15.0,
+auto simulate(ScalarType t0 = 0, ScalarType tmax = 3285.0, ScalarType dt = 0.1, ScalarType TimeExposed = 15.0,
               ScalarType TimeInfectedAsymptomatic = 100.0, ScalarType TimeInfectedSymptomatic = 7.0,
               ScalarType TransmissionProbabilityOnContact = 0.1, ScalarType AsymptomaticProbability = 0.287,
               ScalarType TimeWaningImmunity = 180.0, ScalarType BitingRateNorth = 0.4,
               ScalarType BitingRateCenter = 0.4, ScalarType BitingRateSouth = 0.4,
             ScalarType TransmissionVectorToHuman = 0.27, ScalarType TransmissionHumanToVector = 0.02,
-            ScalarType ic_scale_north = 1.0,
-            ScalarType ic_scale_center= 1.0,
-            ScalarType ic_scale_south = 1.0)
+            ScalarType prop_E_north = 0.10,
+            ScalarType prop_E_center = 0.10,
+            ScalarType prop_E_south = 0.10)
+          //  ScalarType ic_scale_north = 1.0,
+          //  ScalarType ic_scale_center= 1.0,
+          //  ScalarType ic_scale_south = 1.0)
             // ScalarType ic_scale = 0.9310) //, ScalarType ic_scale_north = 1.8, ScalarType ic_scale_south = 0.6)
 {
     mio::set_log_level(mio::LogLevel::warn);
@@ -110,8 +113,8 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 6935.0, ScalarType dt = 0.1, 
         model.parameters.get<mio::oseirvector::TimeWaningImmunity<ScalarType>>()[mio::AgeGroup(i)] =
             TimeWaningImmunity; // Data Estimated
     }
-    model.parameters.get<mio::oseirvector::TimeWaningImmunity<ScalarType>>()[mio::AgeGroup(0)] = 15;
-    model.parameters.get<mio::oseirvector::TimeWaningImmunity<ScalarType>>()[mio::AgeGroup(1)] = 30;
+    model.parameters.get<mio::oseirvector::TimeWaningImmunity<ScalarType>>()[mio::AgeGroup(0)] = 1.0;
+    model.parameters.get<mio::oseirvector::TimeWaningImmunity<ScalarType>>()[mio::AgeGroup(1)] = 1.0;
     // Age_group dependant parameters
     model.parameters.get<mio::oseirvector::AsymptomaticProbability<ScalarType>>()[mio::AgeGroup(0)] =
        0.05; // 0.0; // asumption of the model for under 2
@@ -138,6 +141,51 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 6935.0, ScalarType dt = 0.1, 
     auto model_center = model;
     auto model_south  = model;
 
+    // Helper: set initial conditions from prop_E 
+    // All other proportions derived from  flow equations
+   auto set_ic_from_prop_E = [&](mio::oseirvector::Model<ScalarType>& patch,
+                                ScalarType prop_E_input) {
+        for (size_t i = 0; i < 3; ++i) {
+            ScalarType p_a  = patch.parameters.get<mio::oseirvector::AsymptomaticProbability<ScalarType>>()[mio::AgeGroup(i)];
+            ScalarType T_E  = patch.parameters.get<mio::oseirvector::TimeExposed<ScalarType>>()[mio::AgeGroup(i)];
+            ScalarType T_IA = patch.parameters.get<mio::oseirvector::TimeInfectedAsymptomatic<ScalarType>>()[mio::AgeGroup(i)];
+            ScalarType T_IS = patch.parameters.get<mio::oseirvector::TimeInfectedSymptomatic<ScalarType>>()[mio::AgeGroup(i)];
+            ScalarType T_R  = patch.parameters.get<mio::oseirvector::TimeWaningImmunity<ScalarType>>()[mio::AgeGroup(i)];
+
+            // Compute max safe prop_E for this age group
+            ScalarType multiplier = 1.0 + p_a*(T_IA/T_E) + (1.0-p_a)*(T_IS/T_E) + (T_R/T_E);
+            ScalarType prop_E_max = 1.0 / multiplier;
+
+            // Scale prop_E_input relative to group 1 (children 2-10) max
+         
+            ScalarType T_R_g1  = patch.parameters.get<mio::oseirvector::TimeWaningImmunity<ScalarType>>()[mio::AgeGroup(1)];
+            ScalarType p_a_g1  = patch.parameters.get<mio::oseirvector::AsymptomaticProbability<ScalarType>>()[mio::AgeGroup(1)];
+            ScalarType mult_g1 = 1.0 + p_a_g1*(T_IA/T_E) + (1.0-p_a_g1)*(T_IS/T_E) + (T_R_g1/T_E);
+            ScalarType prop_E_max_g1 = 1.0 / mult_g1;
+
+            // Scale: prop_E for this group = prop_E_input × (prop_E_max / prop_E_max_g1)
+            ScalarType pE  = prop_E_input * (prop_E_max / prop_E_max_g1) * 0.99; // 0.99 safety margin
+            ScalarType pIA = p_a * pE * (T_IA / T_E);
+            ScalarType pIS = (1.0 - p_a) * pE * (T_IS / T_E);
+            ScalarType pR  = pE * (T_R / T_E);
+            ScalarType pS  = 1.0 - pE - pIA - pIS - pR;
+
+            assert(pS > 0.0 && "prop_E too large — S goes negative");
+
+            patch.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Susceptible}]          = pS;
+            patch.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Exposed}]              = pE;
+            patch.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::InfectedAsymptomatic}] = pIA;
+            patch.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::InfectedSymptomatic}]  = pIS;
+            patch.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Recovered}]            = pR;
+            patch.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Susceptible_vector}]   = 0.0;
+            patch.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Infected_vector}]      = 0.0;
+        }
+    };
+
+    set_ic_from_prop_E(model_north,  prop_E_north);
+    set_ic_from_prop_E(model_center, prop_E_center);
+    set_ic_from_prop_E(model_south,  prop_E_south);
+/** 
     // Apply region-specific IC scaling
     for (size_t i = 0; i < 3; ++i) {
         // North
@@ -165,27 +213,18 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 6935.0, ScalarType dt = 0.1, 
         model_south.populations[{mio::AgeGroup(i), mio::oseirvector::InfectionState::Recovered}]            = ic_scale_south * prop_R[i];
     }
 
-
+*/
 
     model_north.parameters.set<mio::oseirvector::MosquitoBitingRate<ScalarType>>(BitingRateNorth); 
     model_center.parameters.set<mio::oseirvector::MosquitoBitingRate<ScalarType>>(BitingRateCenter); 
     model_south.parameters.set<mio::oseirvector::MosquitoBitingRate<ScalarType>>(BitingRateSouth);
 
+    
      
     // ITN coverage data — national average Benin 2010-2018 (MAP, Use per 100 people / 100)
     // Effectiveness fixed at 0.5 (community-level LLIN effect from literature)
     const ScalarType itn_effectiveness = 0.5;
-    std::array<ScalarType, 19> itn_use = {
-        0.0711,  // 2000
-        0.0413,  // 2001
-        0.0213,  // 2002
-        0.0209,  // 2003
-        0.0339,  // 2004
-        0.0310,  // 2005
-        0.0365,  // 2006
-        0.1795,  // 2007
-        0.1371,  // 2008
-        0.1203,  // 2009
+    std::array<ScalarType, 9> itn_use = {
         0.2421,  // 2010
         0.6275,  // 2011 — mass distribution campaign
         0.5268,  // 2012
@@ -197,8 +236,8 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 6935.0, ScalarType dt = 0.1, 
         0.6301   // 2018
     };
 
-    Eigen::Matrix<ScalarType, 19, 1> ebr_north, ebr_center, ebr_south;
-    for (int yr = 0; yr < 19; ++yr) {
+    Eigen::Matrix<ScalarType, 9, 1> ebr_north, ebr_center, ebr_south;
+    for (int yr = 0; yr < 9; ++yr) {
         ScalarType damping = 1.0 - itn_use[yr] * itn_effectiveness;
         ebr_north[yr]  = BitingRateNorth  * damping;
         ebr_center[yr] = BitingRateCenter * damping;
@@ -208,7 +247,8 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 6935.0, ScalarType dt = 0.1, 
     model_north.parameters.set<mio::oseirvector::EffectiveBitingRate<ScalarType>>(ebr_north);
     model_center.parameters.set<mio::oseirvector::EffectiveBitingRate<ScalarType>>(ebr_center);
     model_south.parameters.set<mio::oseirvector::EffectiveBitingRate<ScalarType>>(ebr_south);
-         
+    
+    
 /*/ Mainly Asuumptions but based in the litterature just to check somthing
         // North: single rainy season (Sahelian)
     model_north.parameters.set<mio::oseirvector::SeasonalityAmp1<ScalarType>>(0.6);
@@ -228,6 +268,7 @@ auto simulate(ScalarType t0 = 0, ScalarType tmax = 6935.0, ScalarType dt = 0.1, 
     model_south.parameters.set<mio::oseirvector::SeasonalityPhi1<ScalarType>>(2 * M_PI * 165.0 / 365.0);
     model_south.parameters.set<mio::oseirvector::SeasonalityPhi2<ScalarType>>(2 * M_PI * 310.0 / 365.0);
     */ 
+
     //  PATCH-SPECIFIC OVERRIDES
 
     auto set_patch_population = [&](mio::oseirvector::Model<ScalarType>& patch, ScalarType total_humans,

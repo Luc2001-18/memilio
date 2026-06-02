@@ -81,9 +81,9 @@ public:
         const Index<AgeGroup> age_groups = reduce_index<Index<AgeGroup>>(this->populations.size());
         const auto& params               = this->parameters;
         //  Fetch Malaria-specific parameters
-        const int year_idx = std::min(static_cast<int>(std::floor(t / 365.0)), 18);
+        const int year_idx = std::min(static_cast<int>(std::floor(t / 365.0)), 8);
         const FP a = params.template get<EffectiveBitingRate<FP>>()[year_idx];
-       // const FP a    = params.template get<MosquitoBitingRate<FP>>();
+      //  const FP a    = params.template get<MosquitoBitingRate<FP>>();
 
 
        // const FP hbr  = params.template get<HumanBitingRate<FP>>();
