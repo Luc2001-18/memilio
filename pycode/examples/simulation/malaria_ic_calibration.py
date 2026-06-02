@@ -37,9 +37,9 @@ observed_2010 = {
 # 2. FIXED PARAMETERS
 # =============================================================================
 
-BITING_RATE_NORTH          = 0.5
-BITING_RATE_CENTER         = 0.3
-BITING_RATE_SOUTH          = 0.25
+BITING_RATE_NORTH          = 0.4
+BITING_RATE_CENTER         = 0.4
+BITING_RATE_SOUTH          = 0.4
 T0                   = 0.0
 TMAX                 = 365.0
 DT                   = 1.0

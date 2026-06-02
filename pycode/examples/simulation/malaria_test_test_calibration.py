@@ -30,7 +30,7 @@ observed_data = {
 # 2. FIXED PARAMETERS
 # =============================================================================
 
-TMAX                         = 6935.0   # 9 years: 2010-2018
+TMAX                         = 3285.0   # 9 years: 2010-2018
 DT                           = 1.0
 TIME_EXPOSED                 = 15.0
 TIME_INFECTED_ASYMPTOMATIC   = 100.0
@@ -40,7 +40,11 @@ ASYMPTOMATIC_PROBABILITY     = 0.287
 TIME_WANING_IMMUNITY         = 180.0    # adults; kids overridden in C++
 TRANSMISSION_VECTOR_TO_HUMAN = 0.27
 TRANSMISSION_HUMAN_TO_VECTOR = 0.02
-
+# Fixed prop_E values from IC calibration
+PROP_E_NORTH  = 0.2139
+PROP_E_CENTER = 0.2185
+PROP_E_SOUTH  = 0.0775
+REPORTING_RATE = 0.1978  # fixed from IC calibration
 # =============================================================================
 # 3. COMPARTMENT INDICES
 # Time is column 0 — all indices shifted by +1
@@ -67,9 +71,8 @@ def calculate_summary_stats(results_list, reporting_rate):
         prev_years = []
         inc_years  = []
 
-        spin_up_days = 3650  # 10 years: 2000-2009
         for year in range(9):
-            start = spin_up_days + year * 365
+            start = year * 365
             end   = start + 365
             y_data = data[start:end, :]
         #for year in range(9):
@@ -106,7 +109,7 @@ def run_simulation(params):
           f"{params['BitingRateCenter']:.3f}, {params['BitingRateSouth']:.3f}) "
          # f"alpha=({params['alpha_north']:.3f}, "
          # f"{params['alpha_center']:.3f}, {params['alpha_south']:.3f}) "
-          f"r={params['reporting_rate']:.3f}")
+          f"r={REPORTING_RATE:.3f}")
 
     results = oseirvector.simulate(
         t0                           = 0.0,
@@ -123,12 +126,12 @@ def run_simulation(params):
         BitingRateNorth              = params["BitingRateNorth"],
         BitingRateCenter             = params["BitingRateCenter"],
         BitingRateSouth              = params["BitingRateSouth"],
-        ic_scale_north               = 1.0,
-        ic_scale_center              = 1.0,
-        ic_scale_south               = 1.0,
-    )
+        prop_E_north                 = PROP_E_NORTH,
+        prop_E_center                = PROP_E_CENTER,
+        prop_E_south                 = PROP_E_SOUTH,
+            )
 
-    return calculate_summary_stats(results, params["reporting_rate"])
+    return calculate_summary_stats(results, REPORTING_RATE)
 
 # =============================================================================
 # 6. DISTANCE FUNCTIONS
@@ -217,16 +220,15 @@ def plot_region(history, region_name, output_dir="."):
 
 def plot_posteriors(df, weights, best_vals, output_dir="."):
     params_info = [
-        ("BitingRateNorth",  best_vals["br_north"],   "steelblue",  "Biting Rate North"),
-        ("BitingRateCenter", best_vals["br_center"],  "darkorange", "Biting Rate Center"),
-        ("BitingRateSouth",  best_vals["br_south"],   "seagreen",   "Biting Rate South"),
-        ("reporting_rate",   best_vals["r"],           "purple",    "Reporting Rate"),
+        ("BitingRateNorth",  best_vals["br_north"],  "steelblue",  "Biting Rate North"),
+        ("BitingRateCenter", best_vals["br_center"], "darkorange", "Biting Rate Center"),
+        ("BitingRateSouth",  best_vals["br_south"],  "seagreen",   "Biting Rate South"),
     ]
 
-    fig, axes = plt.subplots(2, 4, figsize=(20, 4))
-    fig.suptitle("Posterior Distributions — All Parameters", fontsize=14)
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+    fig.suptitle("Posterior Distributions — Biting Rates", fontsize=14)
 
-    for ax, (param, best_val, color, label) in zip(axes.flatten(), params_info):
+    for ax, (param, best_val, color, label) in zip(axes, params_info):
         ax.hist(df[param], weights=weights, bins=20,
                 color=color, edgecolor="white", alpha=0.8)
         ax.axvline(best_val, color="red", linewidth=2,
@@ -234,11 +236,10 @@ def plot_posteriors(df, weights, best_vals, output_dir="."):
         ax.set_xlabel(label)
         ax.set_ylabel("Weighted Count")
         ax.set_title(label)
-        ax.legend(fontsize=8)
+        ax.legend(fontsize=9)
 
-   # axes.flatten()[-1].set_visible(False)
     plt.tight_layout()
-    save_path = os.path.join(output_dir, "all_parameters_posterior.png")
+    save_path = os.path.join(output_dir, "biting_rates_posterior.png")
     plt.savefig(save_path, dpi=150)
     plt.close()
     print(f"  Saved: {save_path}")
@@ -251,10 +252,10 @@ if __name__ == "__main__":
 
     # --- Prior ---
     prior = pyabc.Distribution(
-    #    alpha_north      = pyabc.RV("uniform", 0.01, 0.99),
-    #    alpha_center     = pyabc.RV("uniform", 0.01, 0.99),
-    #    alpha_south      = pyabc.RV("uniform", 0.01, 0.99),
-        reporting_rate   = pyabc.RV("uniform", 0.01, 0.99),
+    prop_E_north     = pyabc.RV("uniform", 0.01, 0.29),
+    prop_E_center    = pyabc.RV("uniform", 0.01, 0.29),
+    prop_E_south     = pyabc.RV("uniform", 0.01, 0.29),
+    reporting_rate   = pyabc.RV("uniform", 0.01, 0.99),
         BitingRateNorth  = pyabc.RV("uniform", 0.1, 0.8),
         BitingRateCenter = pyabc.RV("uniform", 0.1, 0.8),
         BitingRateSouth  = pyabc.RV("uniform", 0.1, 0.8),
@@ -263,19 +264,17 @@ if __name__ == "__main__":
     # --- Sanity check ---
     print("=== SANITY CHECK ===")
     test_params = {
-    #    "alpha_north": 0.5, "alpha_center": 0.5, "alpha_south": 0.5,
-        "reporting_rate": 0.45,
-        "BitingRateNorth": 0.5, "BitingRateCenter": 0.3, "BitingRateSouth": 0.25,
+        "reporting_rate": 0.20,
+        "BitingRateNorth": 0.4, "BitingRateCenter": 0.4, "BitingRateSouth": 0.4,
     }
     test_result = run_simulation(test_params)
     print(f"  prev_north  year1 = {test_result['prev_north'][0]:.2f}%  (target: 54.71%)")
     print(f"  inc_north   year1 = {test_result['inc_north'][0]:.2f}    (target: 532.99)")
     print(f"  prev_south  year1 = {test_result['prev_south'][0]:.2f}%  (target: 26.03%)")
     print(f"  inc_south   year1 = {test_result['inc_south'][0]:.2f}    (target: 318.27)")
-    print("=== Sanity check done ===\n")
 
     # --- ABC setup ---
-    population_size = 200
+    population_size = 1000
 
     abc = pyabc.ABCSMC(
         run_simulation,
@@ -289,7 +288,7 @@ if __name__ == "__main__":
 
     # --- Run ---
     print("=== STARTING FULL CALIBRATION ===")
-    history = abc.run(minimum_epsilon=0.05, max_nr_populations=20)
+    history = abc.run(minimum_epsilon=0.005, max_nr_populations=20)
     print(f"\nCalibration finished. Results saved in {db_path}")
 
     # --- Posterior summary ---
@@ -302,7 +301,6 @@ if __name__ == "__main__":
    #     "alpha_north":  (df["alpha_north"]  * weights).sum(),
    #     "alpha_center": (df["alpha_center"] * weights).sum(),
    #     "alpha_south":  (df["alpha_south"]  * weights).sum(),
-        "r":            (df["reporting_rate"] * weights).sum(),
     }
 
     # --- Plots ---
@@ -322,7 +320,7 @@ if __name__ == "__main__":
 #    print(f"  Alpha North:         {best_vals['alpha_north']:.4f}")
 #    print(f"  Alpha Center:        {best_vals['alpha_center']:.4f}")
 #    print(f"  Alpha South:         {best_vals['alpha_south']:.4f}")
-    print(f"  Reporting Rate:      {best_vals['r']:.4f}")
+    print(f"  Reporting Rate:      {REPORTING_RATE:.4f}")
     print("=" * 55)
 
     print("\nDone.")

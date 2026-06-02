@@ -16,14 +16,14 @@ from memilio.simulation import oseirvector
 BITING_RATE_NORTH  = 0.4
 BITING_RATE_CENTER = 0.4
 BITING_RATE_SOUTH  = 0.4
-REPORTING_RATE = 0.2888 #0.6429
+REPORTING_RATE = 0.1978 #0.6429
 T0   = 0.0
 TMAX = 1095.0   # one year
 DT   = 1.0     # daily resolution
 #alpha = 0.3776
-PROP_E_NORTH  = 0.235
-PROP_E_CENTER = 0.183
-PROP_E_SOUTH  = 0.112
+PROP_E_NORTH  = 0.2139
+PROP_E_CENTER = 0.2185
+PROP_E_SOUTH  = 0.0775
 # Fixed parameters (not being calibrated here)
 TIME_EXPOSED                    = 15.0
 TIME_INFECTED_ASYMPTOMATIC      = 100 #80.0
