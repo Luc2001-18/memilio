@@ -21,10 +21,9 @@ T0   = 0.0
 TMAX = 1095.0   # one year
 DT   = 1.0     # daily resolution
 #alpha = 0.3776
-ALPHA_NORTH  = 0.6201 #0.5748
-ALPHA_CENTER = 0.7722 #0.6934
-ALPHA_SOUTH  = 0.7311 #0.1637
-
+PROP_E_NORTH  = 0.235
+PROP_E_CENTER = 0.183
+PROP_E_SOUTH  = 0.112
 # Fixed parameters (not being calibrated here)
 TIME_EXPOSED                    = 15.0
 TIME_INFECTED_ASYMPTOMATIC      = 100 #80.0
@@ -48,7 +47,7 @@ COMPARTMENTS = {
 }
 
 HUMAN_INDICES   = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19]
-SYMPTOMATIC_FRACTIONS = [0.95, 0.5, 0.3]
+SYMPTOMATIC_FRACTIONS = [0.95, 0.7, 0.3]
 E_INDICES             = [2, 9, 16]
 
 AGE_GROUP_NAMES = ["Kids < 2y", "Children 2-10y", "Adults 10+"]
@@ -72,7 +71,7 @@ OBSERVED = {
 print("Running simulation for 3 years (2010-2012)...")
 print(f"  BitingRates: North={BITING_RATE_NORTH}, "
       f"Center={BITING_RATE_CENTER}, South={BITING_RATE_SOUTH}")
-print(f"  Alpha: North={ALPHA_NORTH}, Center={ALPHA_CENTER}, South={ALPHA_SOUTH}")
+print(f"  prop_E: North={PROP_E_NORTH}, Center={PROP_E_CENTER}, South={PROP_E_SOUTH}")
 print(f"  Reporting Rate: {REPORTING_RATE}")
 
 results = oseirvector.simulate(
@@ -90,10 +89,12 @@ results = oseirvector.simulate(
     BitingRateNorth              = BITING_RATE_NORTH,
     BitingRateCenter             = BITING_RATE_CENTER,
     BitingRateSouth              = BITING_RATE_SOUTH,
-    ic_scale_north               = ALPHA_NORTH,
-    ic_scale_center              = ALPHA_CENTER,
-    ic_scale_south               = ALPHA_SOUTH,
+    prop_E_north                 = PROP_E_NORTH,
+    prop_E_center                = PROP_E_CENTER,
+    prop_E_south                 = PROP_E_SOUTH,
 )
+
+
 
 # Convert to numpy — shape becomes (timepoints, compartments) after transpose
 region_data = {}
@@ -101,6 +102,17 @@ for i, name in enumerate(REGION_NAMES):
     region_data[name] = results[i].as_ndarray().T  # shape: (365, 28)
 
 print(f"  Simulation done. Output shape: {region_data['north'].shape}")
+
+# Quick day-0 check
+d = region_data["north"]
+N_g1 = d[0,8]+d[0,9]+d[0,10]+d[0,11]+d[0,12]
+inf_g1 = d[0,10]+d[0,11]
+print(f"North day-0 PfPR: {inf_g1/N_g1*100:.2f}%  (should be ~54%)")
+
+d = region_data["south"]
+N_g1 = d[0,8]+d[0,9]+d[0,10]+d[0,11]+d[0,12]
+inf_g1 = d[0,10]+d[0,11]
+print(f"South day-0 PfPR: {inf_g1/N_g1*100:.2f}%  (should be ~26%)")
 # =============================================================================
 # MONTHS AXIS (approximate: 30 days per month)
 # =============================================================================
@@ -271,6 +283,7 @@ for region in REGION_NAMES:
         print(f"  {region.capitalize():<10} {year_label:<8} "
               f"{prevalence:>26.2f} {incidence:>22.2f}")
 
-    print("=" * 75)
-    print("\nDone. Open the .png files in VS Code to view the plots.")
+    print("-" * 75)
 
+print("=" * 75)
+print("\nDone. Open the .png files in VS Code to view the plots.")

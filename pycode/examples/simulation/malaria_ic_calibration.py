@@ -126,12 +126,10 @@ def calculate_summary_stats(results_list, reporting_rate):
 # =============================================================================
 
 def run_simulation(params):
-    #alpha = params["alpha"]
     r = params["reporting_rate"]
-    print(f"  Running with alpha_north={params['alpha_north']:.3f}, "
-      f"alpha_center={params['alpha_center']:.3f}, "
-      f"alpha_south={params['alpha_south']:.3f}, "
-      f"r={params['reporting_rate']:.3f}")
+    print(f"  Running with prop_E=({params['prop_E_north']:.4f}, "
+          f"{params['prop_E_center']:.4f}, {params['prop_E_south']:.4f}) "
+          f"r={r:.3f}")
 
     results = oseirvector.simulate(
         t0                           = T0,
@@ -146,14 +144,14 @@ def run_simulation(params):
         BitingRateNorth              = BITING_RATE_NORTH,
         BitingRateCenter             = BITING_RATE_CENTER,
         BitingRateSouth              = BITING_RATE_SOUTH,
-        TransmissionVectorToHuman    =0.27, #0.24,
-        TransmissionHumanToVector    =0.02, #0.02,
-        ic_scale_north               = params["alpha_north"],
-        ic_scale_center              = params["alpha_center"],
-        ic_scale_south               = params["alpha_south"],
+        TransmissionVectorToHuman    = 0.27,
+        TransmissionHumanToVector    = 0.02,
+        prop_E_north                 = params["prop_E_north"],
+        prop_E_center                = params["prop_E_center"],
+        prop_E_south                 = params["prop_E_south"],
     )
 
-    return calculate_summary_stats(results,r )
+    return calculate_summary_stats(results, r)
 
 # =============================================================================
 # 6. DISTANCE FUNCTIONS — normalized to 0-1
@@ -194,12 +192,12 @@ distance = pyabc.AdaptiveAggregatedDistance(
 # 7. SANITY CHECK
 # =============================================================================
 
-test = run_simulation({"alpha_north": 1.0, "alpha_center": 1.0,
-                       "alpha_south": 1.0, "reporting_rate": 1.0})
-print(f"  alpha=1.0 → prev_north year1={test['prev_north'][0]:.2f}%")
-print(f"  Target    → 54.71%")
-print(f"  alpha=1.0 → inc_north year1={test['inc_north'][0]:.2f}")
-print(f"  Target    → 532.99")
+test = run_simulation({"prop_E_north": 0.10, "prop_E_center": 0.08,
+                       "prop_E_south": 0.06, "reporting_rate": 1.0})
+print(f"  prop_E=0.10 → prev_north year1={test['prev_north'][0]:.2f}%")
+print(f"  Target      → 54.71%")
+print(f"  prop_E=0.10 → inc_north  year1={test['inc_north'][0]:.2f}")
+print(f"  Target      → 532.99")
 # =============================================================================
 # 8. MAIN — ABC SETUP AND RUN
 # =============================================================================
@@ -207,13 +205,12 @@ print(f"  Target    → 532.99")
 if __name__ == "__main__":
 
     prior = pyabc.Distribution(
-    alpha_north    = pyabc.RV("uniform", 0.01, 0.95),
-    alpha_center   = pyabc.RV("uniform", 0.05, 0.95),
-    alpha_south    = pyabc.RV("uniform", 0.05, 0.95),
-    reporting_rate = pyabc.RV("uniform", 0.01, 0.99)
+        prop_E_north   = pyabc.RV("uniform", 0.01, 0.29),
+        prop_E_center  = pyabc.RV("uniform", 0.01, 0.28),
+        prop_E_south   = pyabc.RV("uniform", 0.01, 0.28),
+        reporting_rate = pyabc.RV("uniform", 0.01, 0.99)
     )
-
-    population_size = 500  # small for first test, increase later
+    population_size = 1000  # small for first test, increase later
 
     abc = pyabc.ABCSMC(
         run_simulation,
@@ -226,42 +223,34 @@ if __name__ == "__main__":
     abc.new(db_path, observed_2010)
 
     print("=== STARTING IC CALIBRATION ===")
-    history = abc.run(minimum_epsilon=0.01, max_nr_populations=10)
+    history = abc.run(minimum_epsilon=0.005, max_nr_populations=10)
     print("\nCalibration finished.")
 
     # --- Posterior summary ---
     df, weights = history.get_distribution(m=0, t=history.max_t)
     
     # Calculate weighted means
-    best_alpha_north  = (df["alpha_north"]  * weights).sum()
-    best_alpha_center = (df["alpha_center"] * weights).sum()
-    best_alpha_south  = (df["alpha_south"]  * weights).sum()
-    best_r            = (df["reporting_rate"] * weights).sum()
+    best_prop_E_north  = (df["prop_E_north"]  * weights).sum()
+    best_prop_E_center = (df["prop_E_center"] * weights).sum()
+    best_prop_E_south  = (df["prop_E_south"]  * weights).sum()
+    best_r             = (df["reporting_rate"] * weights).sum()
 
     print("\n=== ESTIMATED PARAMETERS (Weighted Means) ===")
-    print(f"Alpha North:    {best_alpha_north:.4f}")
-    print(f"Alpha Center:   {best_alpha_center:.4f}")
-    print(f"Alpha South:    {best_alpha_south:.4f}")
+    print(f"prop_E North:   {best_prop_E_north:.4f}")
+    print(f"prop_E Center:  {best_prop_E_center:.4f}")
+    print(f"prop_E South:   {best_prop_E_south:.4f}")
     print(f"Reporting Rate: {best_r:.4f}")
-    # --- What do the initial conditions look like at best alpha? ---
-    print("\n=== INITIAL CONDITIONS AT BEST ALPHA ===")
-    prop_E  = [0.01,  0.01,  0.005]
-    prop_IA = [0.02,  0.05,  0.05]
-    prop_IS = [0.01,  0.01,  0.005]
-    prop_R  = [0.10,  0.20,  0.30]
-    groups  = ["Kids <2y", "Children 2-10y", "Adults"]
 
-    for region, best_alpha in [("North", best_alpha_north),
-                            ("Center", best_alpha_center),
-                            ("South", best_alpha_south)]:
-        print(f"\n  === {region} (alpha={best_alpha:.4f}) ===")
-        for i, g in enumerate(groups):
-            s = best_alpha * (prop_E[i] + prop_IA[i] + prop_IS[i] + prop_R[i])
-            print(f"    {g}: E={best_alpha*prop_E[i]:.4f}  "
-                f"IA={best_alpha*prop_IA[i]:.4f}  "
-                f"IS={best_alpha*prop_IS[i]:.4f}  "
-                f"R={best_alpha*prop_R[i]:.4f}  "
-                f"S={1-s:.4f}")
+    # Show implied PfPR from estimated prop_E
+    p_asymp_g1 = 0.3
+    T_E = 15.0; T_IA = 100.0; T_IS = 7.0
+    pfpr_multiplier = p_asymp_g1*(T_IA/T_E) + (1-p_asymp_g1)*(T_IS/T_E)
+    print(f"\n=== IMPLIED PfPR 2-10 FROM prop_E ===")
+    print(f"  North:  {best_prop_E_north  * pfpr_multiplier * 100:.2f}%  (target 54.71%)")
+    print(f"  Center: {best_prop_E_center * pfpr_multiplier * 100:.2f}%  (target 42.69%)")
+    print(f"  South:  {best_prop_E_south  * pfpr_multiplier * 100:.2f}%  (target 26.03%)")
+
+   
     # =============================================================================
     # 9. COMPREHENSIVE PLOTTING
     # =============================================================================
@@ -272,10 +261,10 @@ if __name__ == "__main__":
 
     for ax, param, best_val, color, label in zip(
         axes,
-        ["alpha_north", "alpha_center", "alpha_south"],
-        [best_alpha_north, best_alpha_center, best_alpha_south],
+        ["prop_E_north", "prop_E_center", "prop_E_south"],
+        [best_prop_E_north, best_prop_E_center, best_prop_E_south],
         ["steelblue", "darkorange", "seagreen"],
-        ["Alpha North", "Alpha Center", "Alpha South"]
+        ["prop_E North", "prop_E Center", "prop_E South"]
     ):
         ax.hist(df[param], weights=weights, bins=20,
                 color=color, edgecolor="white", alpha=0.8)
@@ -291,14 +280,15 @@ if __name__ == "__main__":
     plt.close()
     print("  Saved: alpha_posteriors.png")
 
+    
     # Figure 2 — Correlation plots: each alpha vs reporting rate
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-    fig.suptitle("Correlation: Alpha Parameters vs Reporting Rate", fontsize=14)
+    fig.suptitle("Correlation: prop_E Parameters vs Reporting Rate", fontsize=14)
 
     for ax, param, label, color in zip(
         axes,
-        ["alpha_north", "alpha_center", "alpha_south"],
-        ["Alpha North", "Alpha Center", "Alpha South"],
+        ["prop_E_north", "prop_E_center", "prop_E_south"],
+        ["prop_E North", "prop_E Center", "prop_E South"],
         ["steelblue", "darkorange", "seagreen"]
     ):
         scatter = ax.scatter(df[param], df["reporting_rate"],
@@ -309,9 +299,9 @@ if __name__ == "__main__":
         plt.colorbar(scatter, ax=ax, label="Weight")
 
     plt.tight_layout()
-    plt.savefig("alpha_correlation.png", dpi=150)
+    plt.savefig("prop_E_correlation.png", dpi=150)
     plt.close()
-    print("  Saved: alpha_correlation.png")
+    print("  Saved: prop_E_correlation.png")
 
     # Figure 3 — Reporting rate posterior
     fig, ax = plt.subplots(figsize=(7, 4))
