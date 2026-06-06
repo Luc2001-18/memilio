@@ -35,16 +35,14 @@ DT                           = 1.0
 TIME_EXPOSED                 = 15.0
 TIME_INFECTED_ASYMPTOMATIC   = 100.0
 TIME_INFECTED_SYMPTOMATIC    = 7.0
-TRANSMISSION_PROB_ON_CONTACT = 0.1
-ASYMPTOMATIC_PROBABILITY     = 0.287
 TIME_WANING_IMMUNITY         = 180.0    # adults; kids overridden in C++
 TRANSMISSION_VECTOR_TO_HUMAN = 0.27
 TRANSMISSION_HUMAN_TO_VECTOR = 0.02
 # Fixed prop_E values from IC calibration
-PROP_E_NORTH  = 0.2139
-PROP_E_CENTER = 0.2185
-PROP_E_SOUTH  = 0.0775
-REPORTING_RATE = 0.1978  # fixed from IC calibration
+PROP_E_NORTH  = 0.2166
+PROP_E_CENTER = 0.2089
+PROP_E_SOUTH  = 0.0749
+REPORTING_RATE = 0.1848  # fixed from IC calibration
 # =============================================================================
 # 3. COMPARTMENT INDICES
 # Time is column 0 — all indices shifted by +1
@@ -118,8 +116,6 @@ def run_simulation(params):
         TimeExposed                  = TIME_EXPOSED,
         TimeInfectedAsymptomatic     = TIME_INFECTED_ASYMPTOMATIC,
         TimeInfectedSymptomatic      = TIME_INFECTED_SYMPTOMATIC,
-        TransmissionProbabilityOnContact = TRANSMISSION_PROB_ON_CONTACT,
-        AsymptomaticProbability      = ASYMPTOMATIC_PROBABILITY,
         TimeWaningImmunity           = TIME_WANING_IMMUNITY,
         TransmissionVectorToHuman    = TRANSMISSION_VECTOR_TO_HUMAN,
         TransmissionHumanToVector    = TRANSMISSION_HUMAN_TO_VECTOR,
@@ -252,10 +248,10 @@ if __name__ == "__main__":
 
     # --- Prior ---
     prior = pyabc.Distribution(
-    prop_E_north     = pyabc.RV("uniform", 0.01, 0.29),
-    prop_E_center    = pyabc.RV("uniform", 0.01, 0.29),
-    prop_E_south     = pyabc.RV("uniform", 0.01, 0.29),
-    reporting_rate   = pyabc.RV("uniform", 0.01, 0.99),
+    # prop_E_north     = pyabc.RV("uniform", 0.01, 0.29),
+    # prop_E_center    = pyabc.RV("uniform", 0.01, 0.29),
+    # prop_E_south     = pyabc.RV("uniform", 0.01, 0.29),
+    # reporting_rate   = pyabc.RV("uniform", 0.01, 0.99),
         BitingRateNorth  = pyabc.RV("uniform", 0.1, 0.8),
         BitingRateCenter = pyabc.RV("uniform", 0.1, 0.8),
         BitingRateSouth  = pyabc.RV("uniform", 0.1, 0.8),
@@ -294,15 +290,34 @@ if __name__ == "__main__":
     # --- Posterior summary ---
     df, weights = history.get_distribution(m=0, t=history.max_t)
 
+    # --- Best particle: particle that minimizes total distance ---
+    distances = []
+    for _, row in df.iterrows():
+        sim = run_simulation(dict(row))
+        d = (distance_prev_north(sim, observed_data) +
+            distance_inc_north(sim, observed_data)  +
+            distance_prev_center(sim, observed_data)+
+            distance_inc_center(sim, observed_data) +
+            distance_prev_south(sim, observed_data) +
+            distance_inc_south(sim, observed_data))
+        distances.append(d)
+
+    best_idx = np.argmin(distances)
+    best_row = df.iloc[best_idx]
+
     best_vals = {
-        "br_north":    (df["BitingRateNorth"]  * weights).sum(),
-        "br_center":   (df["BitingRateCenter"] * weights).sum(),
-        "br_south":    (df["BitingRateSouth"]  * weights).sum(),
-   #     "alpha_north":  (df["alpha_north"]  * weights).sum(),
-   #     "alpha_center": (df["alpha_center"] * weights).sum(),
-   #     "alpha_south":  (df["alpha_south"]  * weights).sum(),
+        "br_north":  best_row["BitingRateNorth"],
+        "br_center": best_row["BitingRateCenter"],
+        "br_south":  best_row["BitingRateSouth"],
     }
 
+    print(f"\n=== BEST PARTICLE ===")
+    print(f"  Biting Rate North:  {best_vals['br_north']:.4f}")
+    print(f"  Biting Rate Center: {best_vals['br_center']:.4f}")
+    print(f"  Biting Rate South:  {best_vals['br_south']:.4f}")
+    print(f"  Total distance:     {distances[best_idx]:.6f}")
+
+    
     # --- Plots ---
     print("\n=== GENERATING PLOTS ===")
     plot_posteriors(df, weights, best_vals)

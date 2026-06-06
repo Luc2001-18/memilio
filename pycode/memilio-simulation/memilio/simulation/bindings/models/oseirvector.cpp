@@ -31,16 +31,12 @@ PYBIND11_MODULE(_simulation_oseirvector, m)
     m.def("simulate", &simulate, "Simulates the OSEIR Vector metapopulation model", py::arg("t0") = 0,
           py::arg("tmax") = 6940, py::arg("dt") = 0.1, py::arg("TimeExposed") = 15.0,
           py::arg("TimeInfectedAsymptomatic") = 100.0, py::arg("TimeInfectedSymptomatic") = 7.0,
-          py::arg("TransmissionProbabilityOnContact") = 0.1, py::arg("AsymptomaticProbability") = 0.287,
           py::arg("TimeWaningImmunity") = 180.0, py::arg("BitingRateNorth") = 0.4, py::arg("BitingRateCenter") = 0.4,
           py::arg("BitingRateSouth") = 0.4, py::arg("TransmissionVectorToHuman") = 0.24, 
           py::arg("TransmissionHumanToVector") = 0.02,
           py::arg("prop_E_north")  = 0.10,
           py::arg("prop_E_center") = 0.10,
           py::arg("prop_E_south")  = 0.10);
-     //     py::arg("ic_scale_north") = 0.5,
-     //       py::arg("ic_scale_center") = 0.5,
-     //       py::arg("ic_scale_south") = 0.5);
-         // py::arg("ic_scale") = 1.0); //, py::arg("ic_scale_north") = 1.2, py::arg("ic_scale_south") = 0.8);
+ 
     m.attr("__version__") = "dev";
 }

@@ -22,7 +22,6 @@
 
 #include "memilio/config.h"
 #include "memilio/epidemiology/age_group.h"
-#include "memilio/epidemiology/uncertain_matrix.h"
 #include "memilio/utils/custom_index_array.h"
 #include "memilio/utils/uncertain_value.h"
 #include "memilio/utils/parameter_set.h"
@@ -35,23 +34,6 @@ namespace oseirvector
 /***************************************
  * Define Parameters of the SEIR model *
  ***************************************/
-
-/**
- * @brief probability of getting infected from a contact
- */
-template <typename FP>
-struct TransmissionProbabilityOnContact {
-    using Type = CustomIndexArray<UncertainValue<FP>, AgeGroup>;
-    static Type get_default(AgeGroup size)
-    {
-        return Type(size, 1.);
-    }
-    static std::string name()
-    {
-        return "TransmissionProbabilityOnContact";
-    }
-};
-
 /**
  * @brief the latent time in day unit
  */
@@ -100,33 +82,7 @@ struct TimeInfectedSymptomatic {
     }
 };
 
-/**
- * @brief the contact patterns within the society are modelled using a ContactMatrix
- */
-template <class FP>
-struct ContactPatterns {
-    using Type = UncertainContactMatrix<FP>;
-    static Type get_default(AgeGroup size)
-    {
-        return Type(1, static_cast<Eigen::Index>((size_t)size));
-    }
-    static std::string name()
-    {
-        return "ContactPatterns";
-    }
-};
-
 // New Parameters added 
-
-/**
- * @brief birth rate of the mosquito
- */
-template <typename FP>
-struct MosquitoBirthRate {
-    using Type = UncertainValue<FP>;
-    static Type get_default() { return Type(0.1); }  // example default value
-    static std::string name() { return "MosquitoBirthRate"; }
-};
 
 
 /**
@@ -202,40 +158,11 @@ struct TimeWaningImmunity {
     static std::string name() { return "TimeWaningImmunity"; }
 };
 
-/**
- * @brief parameters for Seasonality multiplier for forces of infection
- */
-template <typename FP>
-struct SeasonalityAmp1 {
-    using Type = double;
-    static Type get_default() { return 0.0; }
-};
-template <typename FP>
-struct SeasonalityAmp2 {
-    using Type = double;
-    static Type get_default() { return 0.0; }
-};
-template <typename FP>
-struct SeasonalityPhi1 {
-    using Type = double;
-    static Type get_default() { return 0.0; }
-};
-template <typename FP>
-struct SeasonalityPhi2 {
-    using Type = double;
-    static Type get_default() { return 0.0; }
-};
-template <typename FP>
-struct SeasonalityPeak {
-    using Type = double;
-    static Type get_default() { return 1.0; } // Default to 1 to prevent division by zero or NaN issues
-};
-
 template <typename FP>
 using ParametersBase =
-    ParameterSet<TransmissionProbabilityOnContact<FP>, TimeExposed<FP>, TimeInfectedAsymptomatic<FP>, TimeInfectedSymptomatic<FP>, AsymptomaticProbability<FP>, TimeWaningImmunity<FP>, ContactPatterns<FP>,
-     MosquitoBirthRate<FP>, TransmissionHumanToVector<FP>, TransmissionVectorToHuman<FP>, MosquitoDeathRate<FP>, 
-     MosquitoBitingRate<FP>, EffectiveBitingRate<FP>, SeasonalityAmp1<FP>,SeasonalityAmp2<FP>, SeasonalityPhi1<FP>, SeasonalityPhi2<FP>, SeasonalityPeak<FP> >;
+    ParameterSet<TimeExposed<FP>, TimeInfectedAsymptomatic<FP>, TimeInfectedSymptomatic<FP>, AsymptomaticProbability<FP>, 
+    TimeWaningImmunity<FP>, TransmissionHumanToVector<FP>, TransmissionVectorToHuman<FP>, 
+    MosquitoDeathRate<FP>, MosquitoBitingRate<FP>, EffectiveBitingRate<FP>>;
 
 /**
  * @brief Parameters of an age-resolved SECIR/SECIHURD model.
@@ -311,13 +238,6 @@ public:
                 this->template get<TimeWaningImmunity<FP>>()[i] = tol_times;
                 corrected                                 = true;
             }
-            if (this->template get<TransmissionProbabilityOnContact<FP>>()[i] < 0.0 ||
-                this->template get<TransmissionProbabilityOnContact<FP>>()[i] > 1.0) {
-                log_warning("Constraint check: Parameter TransmissionProbabilityOnContact changed from {} to {} ",
-                            this->template get<TransmissionProbabilityOnContact<FP>>()[i], 0.0);
-                this->template get<TransmissionProbabilityOnContact<FP>>()[i] = 0.0;
-                corrected                                                     = true;
-            }
             if (this->template get<AsymptomaticProbability<FP>>()[i] < 0.0 ||
                 this->template get<AsymptomaticProbability<FP>>()[i] > 1.0) {
                 log_warning("Constraint check: Parameter AsymptomaticProbability changed from {} to {} ",
@@ -327,12 +247,6 @@ public:
             }
         }
         // New paramters mosquito related 
-            if (this->template get<MosquitoBirthRate<FP>>() < 0.0) {
-            log_warning("Constraint check: MosquitoBirthRate {} smaller than 0. Setting to 0.",
-                        this->template get<MosquitoBirthRate<FP>>());
-            this->template get<MosquitoBirthRate<FP>>() = 0.0;
-            corrected = true;
-        }
 
         if (this->template get<MosquitoDeathRate<FP>>() <= 0.0) {
             log_warning("Constraint check: MosquitoDeathRate {} must be > 0. Setting to {}.",
@@ -347,14 +261,6 @@ public:
             this->template get<MosquitoBitingRate<FP>>() = tol_pos;
             corrected = true;
         }
-
-       /* if (this->template get<HumanBitingRate<FP>>() <= 0.0) {
-            log_warning("Constraint check: HumanBitingRate {} must be > 0. Setting to {}.",
-                        this->template get<HumanBitingRate<FP>>(), tol_pos);
-            this->template get<HumanBitingRate<FP>>() = tol_pos;
-            corrected = true;
-        }
-            */
 
         if (this->template get<TransmissionVectorToHuman<FP>>() < 0.0 ||
             this->template get<TransmissionVectorToHuman<FP>>() > 1.0) {
@@ -371,42 +277,6 @@ public:
             this->template get<TransmissionHumanToVector<FP>>() = 0.0;
             corrected = true;
         }
-// All about Seasonality
-        if (this->template get<SeasonalityAmp1<FP>>() < 0.0) {
-            log_warning("Constraint check: Seasonality {} must be >= 0. Setting to 0.",
-                        this->template get<SeasonalityAmp1<FP>>());
-            this->template get<SeasonalityAmp1<FP>>() = 0.0;
-            corrected = true;
-        }
-
-         if (this->template get<SeasonalityAmp2<FP>>() < 0.0) {
-            log_warning("Constraint check: Seasonality {} must be >= 0. Setting to 0.",
-                        this->template get<SeasonalityAmp2<FP>>());
-            this->template get<SeasonalityAmp2<FP>>() = 0.0;
-            corrected = true;
-        }
-
-         if (this->template get<SeasonalityPhi1<FP>>() < 0.0) {
-            log_warning("Constraint check: Seasonality {} must be >= 0. Setting to 0.",
-                        this->template get<SeasonalityPhi1<FP>>());
-            this->template get<SeasonalityPhi1<FP>>() = 0.0;
-            corrected = true;
-        }
-
-         if (this->template get<SeasonalityPhi2<FP>>() < 0.0) {
-            log_warning("Constraint check: Seasonality {} must be >= 0. Setting to 0.",
-                        this->template get<SeasonalityPhi2<FP>>());
-            this->template get<SeasonalityPhi2<FP>>() = 0.0;
-            corrected = true;
-        }
-
-         if (this->template get<SeasonalityPeak<FP>>() < 0.0) {
-            log_warning("Constraint check: Seasonality {} must be >= 0. Setting to 0.",
-                        this->template get<SeasonalityPeak<FP>>());
-            this->template get<SeasonalityPeak<FP>>() = 0.0;
-            corrected = true;
-        }
-
 
         return corrected;
     }
@@ -454,17 +324,9 @@ public:
                     this->template get<TimeWaningImmunity<FP>>()[i], tol_times);
                 return true;
             }
-            if (this->template get<TransmissionProbabilityOnContact<FP>>()[i] < 0.0 ||
-                this->template get<TransmissionProbabilityOnContact<FP>>()[i] > 1.0) {
-                log_error("Constraint check: Parameter TransmissionProbabilityOnContact {} smaller {} or "
-                          "greater {}",
-                          this->template get<TransmissionProbabilityOnContact<FP>>()[i], 0.0, 1.0);
-                return true;
-            }
             
             if (this->template get<AsymptomaticProbability<FP>>()[i] < 0.0 ||
             this->template get<AsymptomaticProbability<FP>>()[i] > 1.0) {
-             // CHANGED: We now print the index 'i' instead of the whole array
             log_error("Constraint check: AsymptomaticProbability at index {} outside [0,1].", (size_t)i);
     
         return true;
@@ -473,11 +335,6 @@ public:
         }
 
         // New parameters
-            if (this->template get<MosquitoBirthRate<FP>>() < 0.0) {
-            log_error("Constraint check: MosquitoBirthRate {} must be >= 0.",
-                    this->template get<MosquitoBirthRate<FP>>());
-            return true;
-        }
 
         if (this->template get<MosquitoDeathRate<FP>>() <= 0.0) {
             log_error("Constraint check: MosquitoDeathRate {} must be > 0.",
@@ -491,12 +348,6 @@ public:
             return true;
         }
 
-    /*    if (this->template get<HumanBitingRate<FP>>() <= 0.0) {
-            log_error("Constraint check: HumanBitingRate {} must be > 0.",
-                      this->template get<HumanBitingRate<FP>>());
-            return true;
-        }
-*/
         if (this->template get<TransmissionVectorToHuman<FP>>() < 0.0 ||
             this->template get<TransmissionVectorToHuman<FP>>() > 1.0) {
             log_error("Constraint check: TransmissionVectorToHuman {} outside [0,1].",
@@ -504,32 +355,6 @@ public:
             return true;
         }
 
-        if (this->template get<SeasonalityAmp1<FP>>() < 0.0) {
-            log_error("Constraint check: Seasonality {} must be >= 0.",
-                    this->template get<SeasonalityAmp1<FP>>());
-            return true;
-            }
-        if (this->template get<SeasonalityAmp2<FP>>() < 0.0) {
-            log_error("Constraint check: Seasonality {} must be >= 0.",
-                    this->template get<SeasonalityAmp2<FP>>());
-            return true;
-            }
-        if (this->template get<SeasonalityPhi1<FP>>() < 0.0) {
-            log_error("Constraint check: Seasonality {} must be >= 0.",
-                    this->template get<SeasonalityPhi1<FP>>());
-            return true;
-            }
-        if (this->template get<SeasonalityPhi2<FP>>() < 0.0) {
-            log_error("Constraint check: Seasonality {} must be >= 0.",
-                    this->template get<SeasonalityPhi2<FP>>());
-            return true;
-            }
-        
-        if (this->template get<SeasonalityPeak<FP>>() < 0.0) {
-            log_error("Constraint check: Seasonality {} must be >= 0.",
-                    this->template get<SeasonalityPeak<FP>>());
-            return true;
-            }
         if (this->template get<TransmissionHumanToVector<FP>>() < 0.0 ||
             this->template get<TransmissionHumanToVector<FP>>() > 1.0) {
             log_error("Constraint check: TransmissionHumanToVector {} outside [0,1].",
@@ -544,7 +369,7 @@ public:
 private:
     Parameters(ParametersBase<FP>&& base)
         : ParametersBase<FP>(std::move(base))
-        , m_num_groups(this->template get<ContactPatterns<FP>>().get_cont_freq_mat().get_num_groups())
+        , m_num_groups(this->template get<TimeExposed<FP>>().size())
     {
     }
 

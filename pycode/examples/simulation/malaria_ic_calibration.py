@@ -37,17 +37,15 @@ observed_2010 = {
 # 2. FIXED PARAMETERS
 # =============================================================================
 
-BITING_RATE_NORTH          = 0.4
-BITING_RATE_CENTER         = 0.4
-BITING_RATE_SOUTH          = 0.4
+BITING_RATE_NORTH          = 0.7
+BITING_RATE_CENTER         = 0.5
+BITING_RATE_SOUTH          = 0.5
 T0                   = 0.0
 TMAX                 = 365.0
 DT                   = 1.0
 TIME_EXPOSED         = 15.0
 TIME_INFECTED_ASYMPTOMATIC = 100
 TIME_INFECTED_SYMPTOMATIC  = 7.0
-TRANSMISSION_PROB_ON_CONTACT = 0.1
-ASYMPTOMATIC_PROBABILITY     = 0.287
 TIME_WANING_IMMUNITY         = 180 #1825.0
 #SYMPTOMATIC_FRACTION         = 1.0 - ASYMPTOMATIC_PROBABILITY
 
@@ -138,8 +136,6 @@ def run_simulation(params):
         TimeExposed                  = TIME_EXPOSED,
         TimeInfectedAsymptomatic     = TIME_INFECTED_ASYMPTOMATIC,
         TimeInfectedSymptomatic      = TIME_INFECTED_SYMPTOMATIC,
-        TransmissionProbabilityOnContact = TRANSMISSION_PROB_ON_CONTACT,
-        AsymptomaticProbability      = ASYMPTOMATIC_PROBABILITY,
         TimeWaningImmunity           = TIME_WANING_IMMUNITY,
         BitingRateNorth              = BITING_RATE_NORTH,
         BitingRateCenter             = BITING_RATE_CENTER,
@@ -205,7 +201,7 @@ print(f"  Target      → 532.99")
 if __name__ == "__main__":
 
     prior = pyabc.Distribution(
-        prop_E_north   = pyabc.RV("uniform", 0.01, 0.29),
+        prop_E_north   = pyabc.RV("uniform", 0.01, 0.28),
         prop_E_center  = pyabc.RV("uniform", 0.01, 0.28),
         prop_E_south   = pyabc.RV("uniform", 0.01, 0.28),
         reporting_rate = pyabc.RV("uniform", 0.01, 0.99)
@@ -226,20 +222,53 @@ if __name__ == "__main__":
     history = abc.run(minimum_epsilon=0.005, max_nr_populations=10)
     print("\nCalibration finished.")
 
+
     # --- Posterior summary ---
     df, weights = history.get_distribution(m=0, t=history.max_t)
     
-    # Calculate weighted means
-    best_prop_E_north  = (df["prop_E_north"]  * weights).sum()
-    best_prop_E_center = (df["prop_E_center"] * weights).sum()
-    best_prop_E_south  = (df["prop_E_south"]  * weights).sum()
-    best_r             = (df["reporting_rate"] * weights).sum()
+    # --- Weighted mean (kept for reference) ---
+    mean_prop_E_north  = (df["prop_E_north"]  * weights).sum()
+    mean_prop_E_center = (df["prop_E_center"] * weights).sum()
+    mean_prop_E_south  = (df["prop_E_south"]  * weights).sum()
+    mean_r             = (df["reporting_rate"] * weights).sum()
 
-    print("\n=== ESTIMATED PARAMETERS (Weighted Means) ===")
-    print(f"prop_E North:   {best_prop_E_north:.4f}")
-    print(f"prop_E Center:  {best_prop_E_center:.4f}")
-    print(f"prop_E South:   {best_prop_E_south:.4f}")
-    print(f"Reporting Rate: {best_r:.4f}")
+    # --- Best particle: particle that minimizes total distance ---
+    distances = []
+    for _, row in df.iterrows():
+        sim = run_simulation(dict(row))
+        d = (distance_prev_north(sim, observed_2010) +
+            distance_inc_north(sim, observed_2010)  +
+            distance_prev_center(sim, observed_2010)+
+            distance_inc_center(sim, observed_2010) +
+            distance_prev_south(sim, observed_2010) +
+            distance_inc_south(sim, observed_2010))
+        distances.append(d)
+
+    best_idx = np.argmin(distances)
+    best_row = df.iloc[best_idx]
+
+    best_prop_E_north  = best_row["prop_E_north"]
+    best_prop_E_center = best_row["prop_E_center"]
+    best_prop_E_south  = best_row["prop_E_south"]
+    best_r             = best_row["reporting_rate"]
+
+    print("\n=== BEST PARTICLE (minimum distance) ===")
+    print(f"  prop_E North:   {best_prop_E_north:.4f}  (mean: {mean_prop_E_north:.4f})")
+    print(f"  prop_E Center:  {best_prop_E_center:.4f}  (mean: {mean_prop_E_center:.4f})")
+    print(f"  prop_E South:   {best_prop_E_south:.4f}  (mean: {mean_prop_E_south:.4f})")
+    print(f"  Reporting Rate: {best_r:.4f}  (mean: {mean_r:.4f})")
+    print(f"  Total distance: {distances[best_idx]:.6f}")
+    # # Calculate weighted means
+    # best_prop_E_north  = (df["prop_E_north"]  * weights).sum()
+    # best_prop_E_center = (df["prop_E_center"] * weights).sum()
+    # best_prop_E_south  = (df["prop_E_south"]  * weights).sum()
+    # best_r             = (df["reporting_rate"] * weights).sum()
+
+    # print("\n=== ESTIMATED PARAMETERS (Weighted Means) ===")
+    # print(f"prop_E North:   {best_prop_E_north:.4f}")
+    # print(f"prop_E Center:  {best_prop_E_center:.4f}")
+    # print(f"prop_E South:   {best_prop_E_south:.4f}")
+    # print(f"Reporting Rate: {best_r:.4f}")
 
     # Show implied PfPR from estimated prop_E
     p_asymp_g1 = 0.3

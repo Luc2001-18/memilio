@@ -13,23 +13,21 @@ from memilio.simulation import oseirvector
 # CONFIGURATION 
 # =============================================================================
 
-BITING_RATE_NORTH  = 0.4
-BITING_RATE_CENTER = 0.4
-BITING_RATE_SOUTH  = 0.4
-REPORTING_RATE = 0.1978 #0.6429
+BITING_RATE_NORTH  = 0.7
+BITING_RATE_CENTER = 0.5
+BITING_RATE_SOUTH  = 0.5
+REPORTING_RATE = 0.1848
 T0   = 0.0
 TMAX = 1095.0   # one year
 DT   = 1.0     # daily resolution
 #alpha = 0.3776
-PROP_E_NORTH  = 0.2139
-PROP_E_CENTER = 0.2185
-PROP_E_SOUTH  = 0.0775
+PROP_E_NORTH  = 0.2166
+PROP_E_CENTER = 0.2089
+PROP_E_SOUTH  = 0.0749
 # Fixed parameters (not being calibrated here)
 TIME_EXPOSED                    = 15.0
 TIME_INFECTED_ASYMPTOMATIC      = 100 #80.0
 TIME_INFECTED_SYMPTOMATIC       = 7.0
-TRANSMISSION_PROB_ON_CONTACT    = 0.1
-ASYMPTOMATIC_PROBABILITY        = 0.287
 TIME_WANING_IMMUNITY            = 180.0 #180 #730.0
 TRANSMISSION_VECTOR_TO_HUMAN    = 0.27 #0.27
 TRANSMISSION_HUMAN_TO_VECTOR    = 0.02
@@ -81,8 +79,6 @@ results = oseirvector.simulate(
     TimeExposed                  = TIME_EXPOSED,
     TimeInfectedAsymptomatic     = TIME_INFECTED_ASYMPTOMATIC,
     TimeInfectedSymptomatic      = TIME_INFECTED_SYMPTOMATIC,
-    TransmissionProbabilityOnContact = TRANSMISSION_PROB_ON_CONTACT,
-    AsymptomaticProbability      = ASYMPTOMATIC_PROBABILITY,
     TimeWaningImmunity           = TIME_WANING_IMMUNITY,
     TransmissionVectorToHuman    = TRANSMISSION_VECTOR_TO_HUMAN,
     TransmissionHumanToVector    = TRANSMISSION_HUMAN_TO_VECTOR,

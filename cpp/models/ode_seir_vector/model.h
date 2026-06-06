@@ -50,7 +50,8 @@ using Flows = TypeList<Flow<InfectionState::Susceptible, InfectionState::Exposed
                        Flow<InfectionState::InfectedAsymptomatic, InfectionState::Recovered>,
                        Flow<InfectionState::InfectedSymptomatic,  InfectionState::Recovered>,
                        Flow<InfectionState::Recovered,            InfectionState::Susceptible>,
-                       Flow<InfectionState::Susceptible_vector,   InfectionState::Infected_vector>>;
+                       Flow<InfectionState::Susceptible_vector,   InfectionState::Infected_vector>,
+                       Flow<InfectionState::Infected_vector,      InfectionState::Susceptible_vector>>;
 // **TODO**: Add/Adjust the flows as needed for the model.
 
 // clang-format on
@@ -89,19 +90,10 @@ public:
        // const FP hbr  = params.template get<HumanBitingRate<FP>>();
         const FP p_vh = params.template get<TransmissionVectorToHuman<FP>>();
         const FP p_hv = params.template get<TransmissionHumanToVector<FP>>();
-        // Fetch Seasonality Parameters 
-        const FP amp1 = params.template get<SeasonalityAmp1<FP>>();
-        const FP amp2 = params.template get<SeasonalityAmp2<FP>>();
-        const FP phi1 = params.template get<SeasonalityPhi1<FP>>();
-        const FP phi2 = params.template get<SeasonalityPhi2<FP>>();
-        const FP peak = params.template get<SeasonalityPeak<FP>>();
-        // CALCULATE SEASONALITY FOR THIS TIME STEP (t)
-        const FP term1 = amp1 * std::pow(std::abs(std::cos((2.0 * M_PI * t / 365.0) - phi1)), peak);
-        const FP term2 = amp2 * std::pow(std::abs(std::cos((4.0 * M_PI * t / 365.0) - phi2)), peak);
-        const FP seas  = 1.0 + term1 + term2;
+
         // Fetch demographic parameters for mosquitoes
       //  const FP mu_b = params.template get<MosquitoBirthRate<FP>>();
-       // const FP mu_d = params.template get<MosquitoDeathRate<FP>>();
+        const FP mu_d = params.template get<MosquitoDeathRate<FP>>();
       
         // Identify the vector group (the very last group)
         const size_t num_groups = (size_t)params.get_num_groups();
@@ -136,7 +128,7 @@ public:
             const size_t Ri = this->populations.get_flat_index({i, InfectionState::Recovered});
             // Indices for Vector Compartments
             const size_t Sv_i = this->populations.get_flat_index({i, InfectionState::Susceptible_vector});
-          //  const size_t Iv_i = this->populations.get_flat_index({i, InfectionState::Infected_vector});
+            const size_t Iv_i = this->populations.get_flat_index({i, InfectionState::Infected_vector});
             // Calculate Populations
          //   const FP Nh_i    = y[Si] + y[Ei] + y[IAi] + y[ISi] + y[Ri];
           //  const FP divNh_i = (Nh_i < Limits<FP>::zero_tolerance()) ? FP(0.0) : FP(1.0 / Nh_i);
@@ -154,11 +146,11 @@ public:
                 const size_t Iv_global = this->populations.get_flat_index({mio::AgeGroup(vector_idx), InfectionState::Infected_vector});
                 
                 // 2. Humans get infected by the global mosquito pool
-                FOI_H = (a * seas) * p_vh * (y[Iv_global] * div_total_human);
+                FOI_H = (a) * p_vh * (y[Iv_global] * div_total_human);
             } 
             else {
                 // Mosquitoes get infected by the combined human pool we calculated in Step 1
-                FOI_V = (a * seas) * p_hv * (total_infected_humans * div_total_human);
+                FOI_V = (a) * p_hv * (total_infected_humans * div_total_human);
             }
            
             
@@ -201,8 +193,8 @@ public:
             flows[Base::template get_flat_flow_index<InfectionState::Susceptible_vector, InfectionState::Infected_vector>(i)] =
                 FOI_V * y[Sv_i];
            // I_V -> S_V (mosquito turnover: infected mosquitoes die and are replaced by susceptible ones)
-           // flows[Base::template get_flat_flow_index<InfectionState::Infected_vector, InfectionState::Susceptible_vector>(i)] =
-            //    mu_d * y[Iv_i];
+            flows[Base::template get_flat_flow_index<InfectionState::Infected_vector, InfectionState::Susceptible_vector>(i)] =
+                mu_d * y[Iv_i];
         }
     }
     
